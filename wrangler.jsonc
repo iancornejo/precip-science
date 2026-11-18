@@ -4,5 +4,9 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page"
-  }
+  },
+  "routes": [
+    { "pattern": "precip.science", "custom_domain": true },
+    { "pattern": "www.precip.science", "custom_domain": true }
+  ]
 }
