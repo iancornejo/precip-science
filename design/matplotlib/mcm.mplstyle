@@ -1,0 +1,64 @@
+## mcm.mplstyle: Art glass figures for iancornejo.github.io and precip.science (v0.1, S02)
+## Geom must be registered first, so load this through mcm.use() rather than plt.style.use().
+## Colors match tokens.css: paper F3ECDE, umber 2E241D, umber-muted 66574A.
+
+font.family:        Geom
+font.size:          10
+text.color:         2E241D
+mathtext.fontset:   custom
+mathtext.rm:        Geom
+mathtext.it:        Geom:italic
+mathtext.bf:        Geom:bold
+mathtext.sf:        Geom
+mathtext.cal:       Geom:italic
+mathtext.default:   regular      # $Z_{DR}$ and $\rho_{hv}$ set upright, in Geom
+axes.unicode_minus: True         # Geom has the true minus (U+2212)
+
+figure.facecolor:   F3ECDE
+figure.dpi:         150
+savefig.facecolor:  F3ECDE
+savefig.dpi:        200
+savefig.bbox:       tight
+savefig.pad_inches: 0.15
+
+axes.facecolor:     F3ECDE
+axes.edgecolor:     66574A
+axes.linewidth:     0.8
+axes.labelcolor:    2E241D
+axes.labelsize:     10
+axes.titlesize:     11
+axes.titleweight:   semibold
+axes.titlelocation: left
+axes.titlecolor:    2E241D
+axes.titlepad:      8
+axes.spines.top:    False
+axes.spines.right:  False
+axes.axisbelow:     True
+## Line colors: blue, ochre, red, slate, plum, umber. Checked under deutan, protan and tritan
+## simulations (CAM02-UCS): the first three stay >= 28 apart, all six >= 12. All are >= 3:1 on paper.
+axes.prop_cycle:    cycler('color', ['2F4B9A', 'AA7832', '771B14', '7585AE', '5A325B', '66574A'])
+
+grid.color:         2E241D
+grid.alpha:         0.12
+grid.linewidth:     0.6
+
+xtick.color:        66574A
+ytick.color:        66574A
+xtick.labelcolor:   66574A
+ytick.labelcolor:   66574A
+xtick.labelsize:    9
+ytick.labelsize:    9
+xtick.major.width:  0.8
+ytick.major.width:  0.8
+xtick.major.size:   3.5
+ytick.major.size:   3.5
+
+legend.frameon:     False
+legend.fontsize:    9
+legend.title_fontsize: 9
+
+lines.linewidth:    1.6
+lines.solid_capstyle: round
+patch.edgecolor:    F3ECDE
+image.interpolation: nearest
+image.cmap:         cividis

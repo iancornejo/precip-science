@@ -1,0 +1,79 @@
+/*
+ * Art glass design tokens, v0.1 (S02, 18 Nov 2026)
+ * Shared by iancornejo.github.io and precip-science: keep the two copies identical.
+ * Raw palette first, then role tokens. Components use the role tokens, so a dark
+ * theme later (D08) only has to remap the roles.
+ */
+:root {
+  /* Palette: Art glass */
+  --paper: #f3ecde;
+  --paper-deep: #ede3d1;
+  --paper-light: #f7f2e8;
+  --umber: #2e241d;
+  --umber-muted: #66574a;       /* 5.9:1 on paper */
+  --glass-red: #a3352a;         /* 5.8:1 on paper */
+  --glass-blue: #2f4b9a;        /* 6.9:1 on paper */
+  --glass-ochre: #c98a2e;       /* shapes only (2.6:1 on paper) */
+  --glass-ochre-text: #8a5a1c;  /* ochre for text, 5.0:1 */
+  --glass-green: #3f7f62;       /* shapes only (4.0:1) */
+
+  /* Roles */
+  --color-bg: var(--paper);
+  --color-surface: var(--paper-deep);
+  --color-inset: var(--paper-light);
+  --color-text: var(--umber);
+  --color-text-muted: var(--umber-muted);
+  --color-accent: var(--glass-red);
+  --color-link: var(--glass-blue);
+  --color-focus: var(--glass-blue);
+  --color-rule: rgb(46 36 29 / 0.24);
+  --color-rule-strong: rgb(46 36 29 / 0.38);
+  --color-inverse-bg: var(--umber);
+  --color-inverse-text: var(--paper);
+
+  /* Type: Geom for everything */
+  --font-sans: "Geom", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --text-caps: 0.8125rem;                       /* 13px tracked caps labels */
+  --text-sm: 0.9375rem;                         /* 15px nav, meta, buttons */
+  --text-base: 1.0625rem;                       /* 17px body */
+  --text-lead: 1.3125rem;                       /* 21px lead paragraph, h3 */
+  --text-h2: 1.875rem;                          /* 30px */
+  --text-h1: clamp(2.25rem, 4.2vw, 3.5rem);     /* 36-56px page titles */
+  --text-display: clamp(2.75rem, 7vw, 5.75rem); /* 44-92px name */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --leading-display: 1;
+  --leading-tight: 1.08;
+  --leading-snug: 1.25;
+  --leading-body: 1.55;
+  --tracking-caps: 0.28em;
+  --tracking-display: -0.01em;
+  --measure: 34em;
+
+  /* Space: 4px steps to 16px, then larger steps */
+  --space-1: 0.25rem;   /* 4 */
+  --space-2: 0.5rem;    /* 8 */
+  --space-3: 0.75rem;   /* 12 */
+  --space-4: 1rem;      /* 16 */
+  --space-5: 1.5rem;    /* 24 */
+  --space-6: 2rem;      /* 32 */
+  --space-7: 2.5rem;    /* 40 */
+  --space-8: 3rem;      /* 48 */
+  --space-9: 3.5rem;    /* 56 */
+  --space-10: 4rem;     /* 64 */
+  --space-11: 4.5rem;   /* 72 */
+
+  /* Layout and lines */
+  --container: 77.5rem;                 /* 1240px */
+  --gutter: clamp(1.25rem, 3vw, 2.5rem);
+  --rule: 1px solid var(--color-rule);
+  --radius: 0;
+  --tap-target: 44px;
+
+  /* ECCO classes for HTML legends: EccoPy's default colors (D09) */
+  --ecco-stratiform: #616bf5;
+  --ecco-mixed: #52c796;
+  --ecco-convective: #ff0000;
+}

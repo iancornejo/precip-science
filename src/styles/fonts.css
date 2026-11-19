@@ -1,0 +1,20 @@
+/*
+ * Geom (SIL Open Font License 1.1, https://github.com/ThanosPoulakidas/Geom), self-hosted.
+ * Subset cut with pyftsubset from the full variable fonts: Latin, Latin-1, Latin Extended-A,
+ * Greek, general punctuation, super/subscripts and math operators (keeps ≥ ≤ ≈ −),
+ * with every OpenType feature kept. Unlike the Fontsource/Google subsets, which drop ≥ ≤ ≈.
+ */
+@font-face {
+  font-family: "Geom";
+  src: url("/fonts/geom-wght.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geom";
+  src: url("/fonts/geom-italic-wght.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: italic;
+  font-display: swap;
+}

@@ -1,16 +1,37 @@
 ---
+import "../styles/fonts.css";
+import "../styles/tokens.css";
+import "../styles/base.css";
 ---
-
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="preload" href="/fonts/geom-wght.woff2" as="font" type="font/woff2" crossorigin />
+    <meta name="generator" content={Astro.generator} />
+    <title>precip.science</title>
+  </head>
+  <body>
+    <main class="container">
+      <p class="caps">Experimental radar products</p>
+      <h1>precip.science</h1>
+      <p class="lead">Echo classification, storm objects and microphysical fingerprints from NOAA’s MRMS radar mosaic. Experimental, unofficial and in development.</p>
+      <p class="muted">By <a href="https://iancornejo.github.io">Ian Cornejo</a>. For warnings, see the National Weather Service at <a href="https://www.weather.gov">weather.gov</a>.</p>
+    </main>
+  </body>
 </html>
+
+<style>
+  main { padding-block: var(--space-11); }
+  h1 {
+    margin-block: var(--space-4) var(--space-5);
+    font-size: var(--text-display);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+  }
+  .lead { max-width: var(--measure); margin-bottom: var(--space-4); font-size: var(--text-lead); }
+  a { color: var(--color-link); }
+</style>
