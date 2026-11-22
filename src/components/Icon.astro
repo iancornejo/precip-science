@@ -1,0 +1,13 @@
+---
+// Small line icons drawn as SVG (Geom has no arrow or star glyphs).
+interface Props { name: "chevron" | "external" | "star" | "download"; size?: number; class?: string }
+const { name, size = 14, class: cls } = Astro.props;
+---
+<svg class={cls} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+  fill={name === "star" ? "currentColor" : "none"} stroke={name === "star" ? "none" : "currentColor"}
+  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  {name === "chevron" && <path d="m6 9 6 6 6-6" />}
+  {name === "external" && <><path d="M7 17 17 7" /><path d="M8 7h9v9" /></>}
+  {name === "star" && <path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" />}
+  {name === "download" && <><path d="M12 4v11" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></>}
+</svg>

@@ -1,0 +1,104 @@
+# Data, methods and software that precip.science builds on.
+# Each product page lists the entries named in its `credits:` field; the About page lists all.
+# To edit: open this file on GitHub, click the pencil, change it, commit. The site redeploys
+# in a few minutes. Wrap text that contains a colon (:) or a # in quotes.
+#
+#   id:    short name that product pages use in `credits:`
+#   kind:  Data | Method | Software
+#   refs:  citations; give the DOI without "https://doi.org/"
+
+- id: mrms
+  kind: Data
+  name: NOAA Multi-Radar/Multi-Sensor System (MRMS)
+  text: >-
+    Radar mosaics from NOAA's National Severe Storms Laboratory and National Centers for
+    Environmental Prediction (NCEP), taken from NCEP's real-time server, with NOAA's Open Data
+    Dissemination archive on AWS for history and as a fallback. precip.science processes and
+    changes these data, so its products aren't original NOAA data, and NOAA doesn't endorse them.
+  refs:
+    - text: >-
+        Smith, T. M., and Coauthors, 2016: Multi-Radar Multi-Sensor (MRMS) severe weather and
+        aviation products: Initial operating capabilities. Bull. Amer. Meteor. Soc., 97, 1617–1630.
+      doi: 10.1175/BAMS-D-14-00173.1
+    - text: >-
+        Zhang, J., and Coauthors, 2016: Multi-Radar Multi-Sensor (MRMS) quantitative precipitation
+        estimation: Initial operating capabilities. Bull. Amer. Meteor. Soc., 97, 621–638.
+      doi: 10.1175/BAMS-D-14-00174.1
+  links:
+    - label: MRMS at NSSL
+      url: https://www.nssl.noaa.gov/projects/mrms/
+    - label: MRMS on AWS
+      url: https://registry.opendata.aws/noaa-mrms-pds/
+
+- id: ecco
+  kind: Method
+  name: ECCO (Echo Classification from COnvectivity)
+  text: >-
+    Separates convective, mixed and stratiform echo by the texture of the reflectivity field.
+    Developed by Michael J. Dixon and Ulrike Romatschke at NSF NCAR's Earth Observing Laboratory.
+  refs:
+    - text: >-
+        Dixon, M. J., and U. Romatschke, 2022: Three-dimensional convective–stratiform echo-type
+        classification and convectivity retrieval from radar reflectivity. J. Atmos. Oceanic
+        Technol., 39, 1685–1704.
+      doi: 10.1175/JTECH-D-22-0018.1
+    - text: >-
+        Romatschke, U., and M. J. Dixon, 2022: Vertically resolved convective–stratiform echo-type
+        identification and convectivity retrieval for vertically pointing radars. J. Atmos. Oceanic
+        Technol., 39, 1705–1716.
+      doi: 10.1175/JTECH-D-22-0019.1
+
+- id: eccopy
+  kind: Software
+  name: EccoPy
+  text: >-
+    An independent, open-source Python implementation of ECCO by Ian C. Cornejo (BSD-3-Clause).
+  refs:
+    - text: "Cornejo, I. C., 2026: EccoPy. Zenodo, software."
+      doi: 10.5281/zenodo.21840860
+  links:
+    - label: EccoPy on GitHub
+      url: https://github.com/iancornejo/EccoPy
+
+- id: titan
+  kind: Method
+  name: TITAN (Thunderstorm Identification, Tracking, Analysis and Nowcasting)
+  text: >-
+    Finds storms as connected regions above reflectivity and size thresholds, tracks them from
+    one scan to the next, and extrapolates their motion. Developed at NSF NCAR.
+  refs:
+    - text: >-
+        Dixon, M., and G. Wiener, 1993: TITAN: Thunderstorm Identification, Tracking, Analysis,
+        and Nowcasting—A radar-based methodology. J. Atmos. Oceanic Technol., 10, 785–797.
+      doi: 10.1175/1520-0426(1993)010<0785:TTITAA>2.0.CO;2
+
+- id: lrose
+  kind: Software
+  name: LROSE (Lidar Radar Open Software Environment)
+  text: >-
+    Open-source radar and lidar software from NSF NCAR and Colorado State University, funded by the
+    U.S. National Science Foundation. precip.science uses its MRMS ingest, TITAN and track-export
+    applications.
+  refs:
+    - text: >-
+        Dixon, M., J. DeHart, B. Javornik, T.-Y. Cha, M. Bell, and W.-C. Lee, 2026: The Lidar Radar
+        Open Software Environment (LROSE): An end-to-end suite of applications for radar and lidar
+        processing. J. Open Res. Software, 14, 26.
+      doi: 10.5334/jors.630
+    - text: "Dixon, M., and B. Javornik, 2016: LROSE core software. NSF NCAR Earth Observing Laboratory, software."
+      doi: 10.5065/60hz-ry38
+  links:
+    - label: lrose-core on GitHub
+      url: https://github.com/NCAR/lrose-core
+
+- id: fingerprints
+  kind: Method
+  name: Polarimetric fingerprints of precipitation processes
+  text: >-
+    How dual-polarization radar variables change with height reveals the processes acting on rain
+    and ice, as reviewed by Kumjian et al. (2022).
+  refs:
+    - text: >-
+        Kumjian, M. R., O. P. Prat, K. J. Reimel, M. van Lier-Walqui, and H. C. Morrison, 2022:
+        Dual-polarization radar fingerprints of precipitation physics: A review. Remote Sens., 14, 3706.
+      doi: 10.3390/rs14153706

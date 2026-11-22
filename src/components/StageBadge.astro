@@ -1,0 +1,12 @@
+---
+// The experimental status badge every product carries: "Experimental" plus its stage.
+// The dot's color helps scanning; the words carry the meaning.
+import { STAGES, type Stage } from "../lib/site";
+interface Props { stage: Stage; class?: string }
+const { stage, class: cls } = Astro.props;
+const s = STAGES[stage];
+---
+<span class:list={["stage", cls]}>
+  <span class="stage-exp">Experimental</span>
+  <span class="stage-name"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill={s.color} /></svg>{s.label}</span>
+</span>

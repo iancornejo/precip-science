@@ -1,0 +1,36 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import ProductCard from "../../components/ProductCard.astro";
+import StageBadge from "../../components/StageBadge.astro";
+import Notice from "../../components/Notice.astro";
+import { STAGES, stageIds } from "../../lib/site";
+
+const products = (await getCollection("products")).sort((a, b) => a.data.order - b.data.order);
+const live = products.filter((p) => p.data.stage === "live").length;
+const count = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"][products.length - 1] ?? String(products.length);
+---
+<Base title="Products" description="precip.science's experimental radar products and where each one stands: EcConus, storm objects, microphysical fingerprints and EccoWorld.">
+  <header class="page-head">
+    <h1>Products</h1>
+    <p class="lead">{count} products at different stages. All of them are experimental and unofficial{live === 0 ? ", and none is running live yet" : ""}.</p>
+  </header>
+
+  <ul class="cards cards-page">
+    {products.map((p) => <ProductCard product={p} level="h2" />)}
+  </ul>
+
+  <section class="section" aria-labelledby="stages-h">
+    <h2 id="stages-h" class="section-label">Stages</h2>
+    <dl class="stages">
+      {stageIds.map((s) => (
+        <div>
+          <dt><StageBadge stage={s} /></dt>
+          <dd>{STAGES[s].text}</dd>
+        </div>
+      ))}
+    </dl>
+  </section>
+
+  <Notice />
+</Base>

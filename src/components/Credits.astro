@@ -1,0 +1,25 @@
+---
+// The data-credit block: the entries of src/data/credits.yaml named by `ids` (all of them if none).
+import { creditsFor } from "../lib/site";
+interface Props { ids?: string[] }
+const entries = creditsFor(Astro.props.ids);
+---
+<ul class="credits">
+  {entries.map((c) => (
+    <li class="credit">
+      <p class="credit-kind">{c.kind}</p>
+      <h3>{c.name}</h3>
+      <p>{c.text}</p>
+      {c.refs.length > 0 && (
+        <ul class="refs">
+          {c.refs.map((r) => (
+            <li>{r.text}{r.doi && <>{" "}<a href={`https://doi.org/${r.doi}`}>doi:{r.doi}</a></>}</li>
+          ))}
+        </ul>
+      )}
+      {c.links.length > 0 && (
+        <p class="credit-links">{c.links.map((l, i) => <>{i > 0 && " · "}<a href={l.url}>{l.label}</a></>)}</p>
+      )}
+    </li>
+  ))}
+</ul>

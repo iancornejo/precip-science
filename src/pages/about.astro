@@ -1,0 +1,22 @@
+---
+// The About text lives in src/data/about.md (plain Markdown); the credits in src/data/credits.yaml.
+import Base from "../layouts/Base.astro";
+import Credits from "../components/Credits.astro";
+import { Content as AboutText } from "../data/about.md";
+import { SITE } from "../lib/site";
+---
+<Base title="About" description="About precip.science: what it is, how its products are versioned, and the data, methods and software it builds on.">
+  <header class="page-head"><h1>About</h1></header>
+  <div class="prose about-prose"><AboutText /></div>
+
+  <section class="section" id="credits" aria-labelledby="credits-h">
+    <h2 id="credits-h" class="section-label">Credits</h2>
+    <p class="intro">precip.science builds on the data, methods and software below. If a product here is useful to you, these are the works to cite.</p>
+    <Credits />
+  </section>
+
+  <section class="section" aria-labelledby="license-h">
+    <h2 id="license-h" class="section-label">License</h2>
+    <p class="intro">Text and figures on this site are CC BY 4.0, and the site’s code is MIT-licensed, on <a class="link" href={SITE.repo}>GitHub</a>. Data and software from the sources above keep their own terms.</p>
+  </section>
+</Base>

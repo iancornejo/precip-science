@@ -1,0 +1,83 @@
+---
+// One page per product, from the Markdown files in src/data/products/.
+import { Image } from "astro:assets";
+import { getCollection, render, type CollectionEntry } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import StageBadge from "../../components/StageBadge.astro";
+import Credits from "../../components/Credits.astro";
+import Notice from "../../components/Notice.astro";
+import Icon from "../../components/Icon.astro";
+import { STAGES, rich, plain } from "../../lib/site";
+
+export async function getStaticPaths() {
+  const products = (await getCollection("products")).sort((a, b) => a.data.order - b.data.order);
+  return products.map((product) => ({
+    params: { id: product.id },
+    props: { product, others: products.filter((p) => p.id !== product.id) },
+  }));
+}
+
+interface Props { product: CollectionEntry<"products">; others: CollectionEntry<"products">[] }
+const { product, others } = Astro.props;
+const d = product.data;
+const { Content } = await render(product);
+---
+<Base title={d.title} description={plain(d.summary)}>
+  <article class="product">
+    <header class="page-head">
+      <p class="caps crumb"><a href="/products/">Products</a></p>
+      <h1>{d.title}</h1>
+      <StageBadge stage={d.stage} class="stage-lg" />
+      <p class="lead" set:html={rich(d.summary)} />
+    </header>
+
+    {d.figures.length > 0 && (
+      <section class="figures" aria-label="Sample figures">
+        <div class:list={["fig-grid", d.figures.length > 1 && "fig-grid-2"]}>
+          {d.figures.map((f) => (
+            <figure>
+              <div class="fig-frame">
+                <Image src={f.src} alt={f.alt} widths={[560, 840, 1120]} sizes="(max-width: 760px) 100vw, 600px" />
+              </div>
+              {f.caption && <figcaption>{f.caption}</figcaption>}
+            </figure>
+          ))}
+        </div>
+        {d.figure_credit && <p class="credit">{d.figure_credit}</p>}
+      </section>
+    )}
+
+    <div class="product-body">
+      <div class="prose"><Content /></div>
+      <aside class="facts" aria-label="At a glance">
+        <dl>
+          {d.facts.map((f) => (
+            <div><dt>{f.label}</dt><dd set:html={rich(f.value)} /></div>
+          ))}
+          <div><dt>Status</dt><dd>{STAGES[d.stage].label}: {STAGES[d.stage].text.charAt(0).toLowerCase() + STAGES[d.stage].text.slice(1)}</dd></div>
+        </dl>
+        {d.links.length > 0 && (
+          <ul class="facts-links">
+            {d.links.map((l) => <li><a href={l.url}>{l.label}<Icon name="external" size={12} /></a></li>)}
+          </ul>
+        )}
+      </aside>
+    </div>
+
+    {d.credits.length > 0 && (
+      <section class="section" aria-labelledby="credits-h">
+        <h2 id="credits-h" class="section-label">Credits</h2>
+        <Credits ids={d.credits} />
+      </section>
+    )}
+
+    <Notice />
+
+    <nav class="more-products" aria-label="Other products">
+      <p class="caps">More products</p>
+      <ul>
+        {others.map((p) => <li><a href={`/products/${p.id}/`}>{p.data.title}</a></li>)}
+      </ul>
+    </nav>
+  </article>
+</Base>

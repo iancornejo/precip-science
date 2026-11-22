@@ -1,0 +1,26 @@
+---
+import DropMark from "./DropMark.astro";
+import RadarMark from "./RadarMark.astro";
+import { SITE } from "../lib/site";
+const year = new Date().getUTCFullYear();
+---
+<footer class="site-footer container">
+  <div class="footer-inner">
+    <div class="footer-id">
+      <DropMark size={20} />
+      <div>
+        <p class="footer-name">{SITE.name}</p>
+        <p class="muted">{SITE.tagline}, experimental and unofficial</p>
+      </div>
+    </div>
+    <ul class="footer-links">
+      <li><a href="/products/">Products</a></li>
+      <li><a href="/about/">About</a></li>
+      <li><a href={SITE.repo}>GitHub</a></li>
+      <li><a class="footer-home" href={SITE.ownerUrl}><RadarMark size={15} />{SITE.owner}</a></li>
+    </ul>
+    <p class="footer-legal muted">
+      © {year} {SITE.owner} · Not a forecast or warning: see <a href="https://www.weather.gov">weather.gov</a> · Uses NOAA MRMS data, processed here; not endorsed by NOAA · Text and figures CC BY 4.0 · Code MIT
+    </p>
+  </div>
+</footer>

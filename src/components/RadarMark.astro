@@ -1,0 +1,17 @@
+---
+// The personal site's logo: the radar favicon without its cream tile.
+interface Props { size?: number; class?: string; title?: string }
+const { size = 36, class: cls, title } = Astro.props;
+const wave = Array.from({ length: 91 }, (_, i) => {
+  const x = 34 + i * 0.25;
+  const y = 23 - 6 * Math.sin((2 * Math.PI * (x - 34)) / 15);
+  return `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+}).join("");
+---
+<svg class={cls} height={size} width={(size * 49) / 52} viewBox="10 8.5 49 52" role={title ? "img" : undefined}
+  aria-hidden={title ? undefined : "true"} aria-label={title} focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <path d="M32.14 15.09A11 11 0 1 0 32.14 30.91" stroke="#2F4B9A" stroke-width="5" stroke-linecap="round" fill="none" />
+  <circle cx="24.5" cy="23" r="6.2" fill="#C98A2E" />
+  <path d={wave} stroke="#C98A2E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <path d="M13 39.5H36M13 45.5H36M13 51.5H36M13 57.5H36" stroke="#C98A2E" stroke-width="4" stroke-linecap="round" />
+</svg>

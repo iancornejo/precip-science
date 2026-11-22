@@ -1,0 +1,17 @@
+---
+// One product as a card linking to its page (home page and the Products index).
+import type { CollectionEntry } from "astro:content";
+import ProductIcon from "./ProductIcon.astro";
+import StageBadge from "./StageBadge.astro";
+import { rich } from "../lib/site";
+interface Props { product: CollectionEntry<"products">; level?: "h2" | "h3" }
+const { product, level = "h3" } = Astro.props;
+const { title, summary, stage, icon } = product.data;
+const Heading = level;
+---
+<li class="card">
+  <ProductIcon name={icon} />
+  <Heading class="card-title"><a href={`/products/${product.id}/`}>{title}</a></Heading>
+  <p class="card-text" set:html={rich(summary)} />
+  <StageBadge stage={stage} />
+</li>
