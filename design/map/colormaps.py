@@ -5,10 +5,10 @@ browser with a 256-entry RGBA table per layer. This script builds those tables, 
 legends, from the same sources as the site's figures:
 
   echo type, convectivity   EccoPy's own colormaps (D09), plus the draft Art glass
-                            alternative (website-plan.md, S02) behind ?palette=artglass
+                            alternative (website-plan.md, S02) on the legend's switch
   composite reflectivity    cmweather ChaseSpectral, -10 to 70 dBZ (D10)
-  precipitation rate        Ian's QPE bins (Cornejo et al. figures; 0.1, 1, 2, 6 ... 200, as mm/h),
-                            with viridis reversed (log 0.1-100 mm/h) as the alternative
+  precipitation rate        cmweather HomeyerRainbow, log 0.1-100 mm/h, with viridis reversed as the
+                            alternative (RATE_PALETTES); Ian's QPE bins are kept for a QPE layer
   precipitation type        CVD-checked colors for MRMS PrecipFlag classes (proposed in S08)
 
 Codes: 0 no echo / no precipitation (transparent), 254 missing, 255 no coverage (a light wash).
@@ -127,19 +127,32 @@ def rate(code: int) -> float:
     return 0.1 * 10 ** ((code - 1) / 60.0)
 
 
-def rate_palette() -> dict:
-    base = matplotlib.colormaps["viridis"]
-    cmap = lambda f: base(0.95 * (1.0 - f))   # reversed, trimmed so the lightest step stays visible on paper
+def rate_palette(name: str, t_low: float, t_high: float, label: str) -> dict:
+    """A continuous log-scale palette, 0.1-100 mm/h, from colormap `name` sampled from t_low to t_high."""
+    base = matplotlib.colormaps[name]
+    cmap = lambda f: base(t_low + (t_high - t_low) * f)
     frac = lambda r: (np.log10(min(max(r, R_MIN), R_MAX)) - np.log10(R_MIN)) / (np.log10(R_MAX) - np.log10(R_MIN))
     lut = base_lut()
     for code in range(1, 251):
         lut[code] = (*to8(cmap(frac(rate(code)))), 255)
     stops = [{"v": round(float(10 ** e), 4), "color": css(to8(cmap(frac(10 ** e))))} for e in np.linspace(-1, 2, 61)]
-    return {"lut": lut_hex(lut), "legend": {"kind": "continuous", "scale": "log", "min": R_MIN, "max": R_MAX,
-            "units": "mm/h", "stops": stops, "ticks": [0.1, 1, 10, 100]}}
+    return {"label": label, "lut": lut_hex(lut), "legend": {"kind": "continuous", "scale": "log", "min": R_MIN,
+            "max": R_MAX, "units": "mm/h", "stops": stops, "ticks": [0.1, 1, 10, 100]}}
 
 
-# Ian's rainfall colorbar (sampled from his figure, Nov 25), used here as rate bins in mm/h.
+# Rain rate (Nov 25): cmweather's HomeyerRainbow by default. Of the maps compared on live-like frames
+# (viridis, HomeyerRainbow, cmocean dense, batlow, YlGnBu and others; see design/map/README.md), it keeps the most distinguishable steps (CAM02-UCS path about 150 against
+# about 110 for viridis) while drizzle stays visible on both the paper and the water. cmocean dense lost
+# light rain over water, and batlow put drizzle in pink. Viridis (reversed, trimmed so its lightest step
+# shows on paper) stays as the alternative.
+RATE_PALETTES = {
+    "homeyer": ("HomeyerRainbow", 0.0, 1.0, "Homeyer"),
+    "viridis": ("viridis", 0.95, 0.0, "Viridis"),
+}
+
+
+# Ian's rainfall colorbar (sampled from his figure, Nov 25). Saved for the hourly QPE layer planned with
+# the intensity-duration product (S20); the rain-rate layer used it briefly on Nov 25. Edges in mm.
 # The lowest bin is a touch darker than his #F0F0F0 so drizzle stays visible on the paper basemap.
 QPE_EDGES = [0.1, 1, 2, 6, 10, 15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200]
 QPE_COLORS = ["#D9D9D9", "#CCE6FF", "#99CDFF", "#66B2FE", "#3399FF", "#1F77B4", "#FEFF99", "#FFCC66",
@@ -211,8 +224,7 @@ def main() -> None:
                 "eccopy": {"label": "EccoPy", **conv_palette(ecm.convectivity_cmap())},
                 "artglass": {"label": "Art glass", **conv_palette(artglass_conv_cmap())}}},
             "composite": {"default": "chase", "palettes": {"chase": {"label": "ChaseSpectral", **composite_palette()}}},
-            "precip_rate": {"default": "qpe", "palettes": {
-                "qpe": qpe_palette(), "viridis": {"label": "Viridis", **rate_palette()}}},
+            "precip_rate": {"default": "homeyer", "palettes": {k: rate_palette(*v) for k, v in RATE_PALETTES.items()}},
             "precip_flag": {"default": "artglass", "palettes": {"artglass": {"label": "Art glass", **flag_palette()}}},
         },
         "no_coverage": css(NO_COVERAGE[:3]) + f"{NO_COVERAGE[3]:02x}",

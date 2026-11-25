@@ -34,7 +34,7 @@
 .map-btn-primary:hover:not(:disabled) { background: #4a3a2e; }
 .map-btn-text { min-width: 0; padding: 0 10px; font-size: 0.875rem; }
 #map-latest[aria-pressed="true"] { opacity: 1; color: var(--color-text); border-color: transparent; background: transparent; }
-#map-latest[aria-pressed="true"]::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--glass-green); }
+#map-latest[aria-pressed="true"]::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--glass-green); }
 .i-pause { display: none; }
 [data-playing="true"] .i-play { display: none; }
 [data-playing="true"] .i-pause { display: inline; }
@@ -277,3 +277,18 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .maplibregl-canvas { transition: none; }
 }
+
+/* Time bar collapsed to one row (Ian, Nov 25): the time stays on screen, and so do the notice and credits. */
+.map-bar-toggle svg { transition: transform 160ms ease; }
+.map-timebar[data-collapsed="true"] .map-bar-toggle svg { transform: rotate(180deg); }
+.map-timebar[data-collapsed="true"] .map-bar-more,
+.map-timebar[data-collapsed="true"] .map-notice-more { display: none; }
+.map-timebar[data-collapsed="true"] .map-foot { margin-top: 6px; line-height: 1.35; }
+.map-timebar[data-collapsed="true"] .map-foot > p { display: inline; margin: 0; font-size: 0.6875rem; }
+.map-timebar[data-collapsed="true"] .map-foot > .map-credits::before { content: " "; }
+.map-timebar[data-collapsed="true"] .map-summary { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (max-width: 720px) {
+  /* On phones the collapsed bar keeps play, the time, Latest and the toggle; stepping comes back with the bar. */
+  .map-timebar[data-collapsed="true"] #map-prev, .map-timebar[data-collapsed="true"] #map-next { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .map-bar-toggle svg { transition: none; } }

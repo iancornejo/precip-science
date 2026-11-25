@@ -19,8 +19,15 @@ distances under full-severity deutan, protan and tritan simulations) for the cla
 | --- | --- | --- |
 | Echo type, convectivity | EccoPy's defaults (D09), or the S02 Art glass draft from the legend's switch (or `?palette=artglass`) | `eccopy.core.colormaps` |
 | Composite reflectivity | ChaseSpectral, −10 to 70 dBZ (D10) | cmweather |
-| Precipitation rate | QPE bins from Ian's studies (0.1–200 mm/h, 16 bins; the first gray darkened to show on the paper basemap), or viridis reversed, 0.1–100 mm/h, log, from the legend's switch | this script, matplotlib |
+| Precipitation rate | HomeyerRainbow, 0.1–100 mm/h, log; viridis reversed on the legend's switch. Ian's QPE bins (0.1–200, 16 bins) stay in the script for a QPE layer | cmweather, matplotlib |
 | Precipitation type | seven MRMS PrecipFlag classes, every pair ≥ 17 apart under all three simulations | this script |
+
+Choosing the rain-rate map (Nov 25): candidates were scored over the paper at the map's 0.9 opacity
+(CAM02-UCS path length, step uniformity, lightness, distance to the paper, the water and the umber lines,
+and the three CVD simulations), then drawn on two storm views. HomeyerRainbow had the longest path of
+the maps that keep drizzle visible (about 150, against about 110 for viridis; its faintest step is still
+23 from the paper). cmocean dense lost light rain over water (7 from the water color, against 24 for HomeyerRainbow), batlow drew drizzle in pink, and the
+rainbow maps that start dark (RRate11, CET-R4, plasmidis) gave drizzle the most weight.
 
 The legend's switch remembers the choice per layer in the browser (`localStorage`). Codes 0 (no echo) are clear, 254 (missing) and 255 (no coverage) get a light umber wash.
 

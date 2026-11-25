@@ -174,6 +174,7 @@ const ui = {
   latest: $<HTMLButtonElement>("#map-latest"),
   speed: $<HTMLSelectElement>("#map-speed"),
   gotoOpen: $<HTMLButtonElement>("#map-goto-open"),
+  barToggle: $<HTMLButtonElement>("#map-bar-toggle"),
   gotoForm: $<HTMLFormElement>("#map-goto"),
   gotoTime: $<HTMLInputElement>("#map-goto-time"),
   gotoUtc: $<HTMLElement>("#map-goto-utc"),
@@ -592,7 +593,24 @@ const toLocalInput = (t: number) => {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };
 
+/** Collapse the time bar to one row (play, step, time, Latest) or open it again; remembered per browser. */
+const BAR_KEY = "precip-map-bar";
+const barCollapsed = () => $<HTMLElement>(".map-timebar").dataset.collapsed === "true";
+function setBarCollapsed(collapsed: boolean, save = true) {
+  $<HTMLElement>(".map-timebar").dataset.collapsed = String(collapsed);
+  const label = collapsed ? "Show the time controls" : "Hide the time controls";
+  ui.barToggle.setAttribute("aria-expanded", String(!collapsed));
+  ui.barToggle.setAttribute("aria-label", label);
+  ui.barToggle.title = label;
+  if (collapsed && !ui.gotoForm.hidden) {
+    ui.gotoForm.hidden = true;
+    ui.gotoOpen.setAttribute("aria-expanded", "false");
+  }
+  if (save) try { localStorage.setItem(BAR_KEY, collapsed ? "collapsed" : "open"); } catch { /* private mode */ }
+}
+
 async function openGoto() {
+  if (barCollapsed()) setBarCollapsed(false);
   const open = ui.gotoForm.hidden;
   ui.gotoForm.hidden = !open;
   ui.gotoOpen.setAttribute("aria-expanded", String(open));
@@ -698,6 +716,10 @@ async function start() {
   ui.latest.addEventListener("click", () => goLatest());
   ui.speed.value = String(state.speed);
   ui.speed.addEventListener("change", () => { state.speed = Number(ui.speed.value); });
+  let barPref: string | null = null;
+  try { barPref = localStorage.getItem(BAR_KEY); } catch { /* private mode */ }
+  setBarCollapsed(barPref === "collapsed", false);
+  ui.barToggle.addEventListener("click", () => setBarCollapsed(!barCollapsed()));
   ui.gotoOpen.addEventListener("click", () => openGoto());
   ui.gotoForm.addEventListener("submit", gotoTime);
   ui.gotoTime.addEventListener("input", showGotoUtc);

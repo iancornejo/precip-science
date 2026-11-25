@@ -22,6 +22,7 @@ const icon = {
   play: `<svg class="i-play" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M5 3.5v11l9-5.5z" fill="currentColor"/></svg><svg class="i-pause" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4.5 3.5h3v11h-3zM10.5 3.5h3v11h-3z" fill="currentColor"/></svg>`,
   prev: `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 3.5h2v11H4zM15 3.5v11L7 9z" fill="currentColor"/></svg>`,
   next: `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M12 3.5h2v11h-2zM3 3.5v11L11 9z" fill="currentColor"/></svg>`,
+  bar: `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4.5 6.75 9 11.25l4.5-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 ---
 <Base
@@ -81,7 +82,9 @@ const icon = {
             <p id="map-age" class="map-age"></p>
           </div>
           <button id="map-latest" type="button" class="map-btn map-btn-text" aria-pressed="false">Latest</button>
+          <button id="map-bar-toggle" type="button" class="map-btn map-bar-toggle" aria-expanded="true" aria-controls="map-bar-more" aria-label="Hide the time controls" title="Hide the time controls" set:html={icon.bar} />
         </div>
+        <div id="map-bar-more" class="map-bar-more">
         <input id="map-slider" class="map-slider" type="range" min="0" max="0" value="0" step="1" aria-label="Frame time" />
         <div class="map-row map-row-opts">
           <form id="map-windows" class="map-seg" aria-label="Loop length">
@@ -101,8 +104,11 @@ const icon = {
           <span id="map-loading" class="map-loading" role="status" hidden></span>
           <button id="map-about-open" type="button" class="map-btn map-btn-text map-about-btn">About<span class="map-wide">&nbsp;this map</span></button>
         </div>
-        <p class="map-notice"><strong>Experimental and unofficial.</strong> Not a forecast or warning: see <a href="https://www.weather.gov">weather.gov</a>.</p>
-        <p id="map-credits" class="map-credits"></p>
+        </div>
+        <div class="map-foot">
+          <p class="map-notice"><strong>Experimental and unofficial.</strong><span class="map-notice-more"> Not a forecast or warning: see <a href="https://www.weather.gov">weather.gov</a>.</span></p>
+          <p id="map-credits" class="map-credits"></p>
+        </div>
         <p id="map-summary" class="map-summary" aria-live="polite"></p>
       </div>
     </div>
