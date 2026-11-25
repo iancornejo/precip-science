@@ -14,9 +14,18 @@ export type Legend =
 export interface Palette {
   id: string;
   label: string;
-  rgba: Uint8Array;                     // 256 x RGBA
-  chunks: { plte: Uint8Array; trns: Uint8Array };
+  rgba: Uint8Array;                     // 256 x RGBA, the whole table (legend, panel swatches)
+  chunks: { plte: Uint8Array; trns: Uint8Array };   // echo only: missing and no-coverage clear
   legend: Legend;
+}
+
+/** Codes drawn as a wash rather than as echo: 254 missing, 255 no coverage. */
+export const WASH_CODES = [254, 255];
+
+function echoOnly(rgba: Uint8Array): Uint8Array {
+  const out = rgba.slice();
+  for (const c of WASH_CODES) out[4 * c + 3] = 0;
+  return out;
 }
 
 type Raw = { layers: Record<string, { default: string; palettes: Record<string, { label: string; lut: string; legend: Legend }> }> };
@@ -38,10 +47,29 @@ export function palette(layer: LayerId, wanted?: string | null): Palette {
   let p = cache.get(key);
   if (!p) {
     const rgba = hexToBytes(entry.palettes[id].lut);
-    p = { id, label: entry.palettes[id].label, rgba, chunks: paletteChunks(rgba), legend: entry.palettes[id].legend };
+    p = { id, label: entry.palettes[id].label, rgba, chunks: paletteChunks(echoOnly(rgba)), legend: entry.palettes[id].legend };
     cache.set(key, p);
   }
   return p;
+}
+
+const washCache = new Map<string, { plte: Uint8Array; trns: Uint8Array }>();
+
+/**
+ * The wash (missing and no-coverage codes only) for a layer. It's drawn by its own layers, which
+ * switch frames instantly: it barely changes between frames, and two semi-transparent washes
+ * overlapping during a crossfade would darken it for a moment on every frame.
+ */
+export function washChunks(layer: LayerId): { plte: Uint8Array; trns: Uint8Array } {
+  let w = washCache.get(layer);
+  if (!w) {
+    const full = palette(layer).rgba;
+    const rgba = new Uint8Array(1024);
+    for (const c of WASH_CODES) rgba.set(full.subarray(4 * c, 4 * c + 4), 4 * c);
+    w = paletteChunks(rgba);
+    washCache.set(layer, w);
+  }
+  return w;
 }
 
 export function isDefaultPalette(layer: LayerId, id: string): boolean {

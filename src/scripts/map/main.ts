@@ -12,7 +12,7 @@ import { PMTiles, Protocol } from "pmtiles";
 
 import { basemap, TERRAIN_CREDIT, TERRAIN_LAYER, type Basemap } from "./basemap";
 import { stats, tileBytes, reader } from "./blocks";
-import { palette, paletteChoices, type Palette } from "./colors";
+import { palette, paletteChoices, washChunks, type Palette } from "./colors";
 import { FrameStore, type Frame } from "./frames";
 import { LAYERS, LAYER_ORDER, NO_COVERAGE, type LayerId } from "./layers";
 import { legendHtml } from "./legend";
@@ -93,14 +93,16 @@ async function frameTile(req: RequestParameters): Promise<{ data: ArrayBuffer }>
   const m = /^frame:\/\/(.+)\/([a-z_]+)\/([a-z0-9-]+)\/(\d+)\/(\d+)\/(\d+)$/.exec(req.url);
   if (!m) throw new Error(`bad frame url ${req.url}`);
   const layer = m[2] as LayerId;
-  const p = palette(layer, m[3]);
+  const chunks = m[3] === "wash" ? washChunks(layer) : palette(layer, m[3]).chunks;
   const bytes = await tileBytes(decodeURIComponent(m[1]), +m[4], +m[5], +m[6]);
-  const png = recolor(bytes ?? (noCov ??= await onePixel(NO_COVERAGE)), p.chunks);
+  const png = recolor(bytes ?? (noCov ??= await onePixel(NO_COVERAGE)), chunks);
   return { data: png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer };
 }
 
 const template = (f: Frame, layer: LayerId) =>
   `frame://${encodeURIComponent(f.url)}/${layer}/${pal(layer).id}/{z}/{x}/{y}`;
+const washTemplate = (f: Frame, layer: LayerId) =>
+  `frame://${encodeURIComponent(f.url)}/${layer}/wash/{z}/{x}/{y}`;
 
 // ---------------------------------------------------------------- map
 maplibregl.setWorkerUrl(workerUrl);
@@ -285,31 +287,64 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let chain: Promise<unknown> = Promise.resolve();
 
 /** Show a frame. Calls run one after another, and a call that's been overtaken skips. */
-function display(tpl: string, fadeMs = 0): Promise<boolean> {
+function display(f: Frame, layer: LayerId, fadeMs = 0): Promise<boolean> {
   const gen = ++showGen;
-  const run = chain.then(() => swap(tpl, fadeMs, gen));
+  const echo = template(f, layer), wash = washTemplate(f, layer);
+  const run = chain.then(() => swap(echo, wash, fadeMs, gen));
   chain = run.catch(() => false);
   return run;
 }
 
-async function swap(tpl: string, fadeMs: number, gen: number): Promise<boolean> {
+const washOf = (id: string) => (id === "radar-a" ? "wash-a" : "wash-b");
+
+async function swap(echo: string, wash: string, fadeMs: number, gen: number): Promise<boolean> {
   if (gen !== showGen) return false;
-  if (shown[front] === tpl) return true;
+  if (shown[front] === echo && shown[washOf(front)] === wash) return true;
   const back = front === "radar-a" ? "radar-b" : "radar-a";
-  if (shown[back] !== tpl) {
-    (map.getSource(back) as RasterTileSource).setTiles([tpl]);
-    shown[back] = tpl;
+  for (const [id, tpl] of [[back, echo], [washOf(back), wash]] as const) {
+    if (shown[id] !== tpl) {
+      (map.getSource(id) as RasterTileSource).setTiles([tpl]);
+      shown[id] = tpl;
+    }
   }
   await whenIdle();
   if (gen !== showGen) return false;
   map.moveLayer(back, base.radarBefore);                  // the incoming frame goes on top
-  map.setPaintProperty(back, "raster-opacity-transition", { duration: fadeMs, delay: 0 });
-  map.setPaintProperty(back, "raster-opacity", OPACITY);
-  if (fadeMs > 0) await sleep(fadeMs);
-  map.setPaintProperty(front, "raster-opacity-transition", { duration: 0, delay: 0 });
-  map.setPaintProperty(front, "raster-opacity", 0);
+  map.setPaintProperty(washOf(back), "raster-opacity", OPACITY);   // the wash switches at once
+  map.setPaintProperty(washOf(front), "raster-opacity", 0);
+  await crossfade(back, front, fadeMs);
   front = back;
   return true;
+}
+
+/**
+ * Fade the incoming frame in over the outgoing one so their combined opacity stays OPACITY
+ * throughout: incoming b goes 0 → OPACITY, outgoing (OPACITY − b) / (1 − b). Where both frames
+ * have echo, the colors blend with no darkening; echo that appears or goes away fades in or out.
+ * (Fading the incoming frame in over the outgoing one at full strength made every step darken,
+ * then snap back.)
+ */
+function crossfade(back: string, frontId: string, ms: number): Promise<void> {
+  const set = (b: number) => {
+    map.setPaintProperty(back, "raster-opacity", b);
+    map.setPaintProperty(frontId, "raster-opacity", b >= OPACITY ? 0 : (OPACITY - b) / (1 - b));
+  };
+  if (ms <= 0) { set(OPACITY); return Promise.resolve(); }
+  return new Promise((resolve) => {
+    let done = false;
+    const t0 = performance.now();
+    const finish = () => { if (done) return; done = true; set(OPACITY); resolve(); };
+    const step = (now: number) => {
+      if (done) return;
+      const k = Math.min(1, (now - t0) / ms);
+      if (k >= 1) return finish();
+      set(OPACITY * k);
+      requestAnimationFrame(step);
+    };
+    set(0);
+    requestAnimationFrame(step);
+    setTimeout(finish, ms + 250);                         // a hidden tab doesn't run animation frames
+  });
 }
 
 /** The two radar sources, added once the first frame's header gives the grid's bounds. */
@@ -322,10 +357,12 @@ async function ensureRadar(f: Frame) {
 }
 
 function addRadar(first: Frame, grid: ViewBox) {
-  for (const id of ["radar-a", "radar-b"]) {
+  // Bottom to top: the two wash layers (missing, no coverage), then the two echo layers.
+  for (const id of ["wash-a", "wash-b", "radar-a", "radar-b"]) {
+    const tpl = id.startsWith("wash") ? washTemplate(first, state.layer) : template(first, state.layer);
     map.addSource(id, {
       type: "raster",
-      tiles: [template(first, state.layer)],
+      tiles: [tpl],
       tileSize: 256,
       minzoom: 0,
       maxzoom: 7,
@@ -333,9 +370,14 @@ function addRadar(first: Frame, grid: ViewBox) {
     });
     map.addLayer({
       id, type: "raster", source: id,
-      paint: { "raster-opacity": id === "radar-a" ? OPACITY : 0, "raster-resampling": "nearest", "raster-fade-duration": 0 },
+      paint: {
+        "raster-opacity": id.endsWith("-a") ? OPACITY : 0,
+        "raster-opacity-transition": { duration: 0, delay: 0 },
+        "raster-resampling": "nearest",
+        "raster-fade-duration": 0,
+      },
     }, base.radarBefore);
-    shown[id] = template(first, state.layer);
+    shown[id] = tpl;
   }
 }
 
@@ -410,7 +452,7 @@ async function showIdx(i: number, announce = true, fadeMs = 0) {
   updateTimeUi();
   const f = current()!;
   await ensureRadar(f);
-  await display(template(f, state.layer), fadeMs);
+  await display(f, state.layer, fadeMs);
   if (announce && !state.playing) scheduleSummary();
   if (panel.visible) refreshPanel();
 }
@@ -444,7 +486,7 @@ async function setPalette(id: string) {
   savePalettes();
   renderLegend();
   const f = current();
-  if (f) await display(template(f, state.layer));
+  if (f) await display(f, state.layer);
   if (panel.visible) refreshPanel();
 }
 
