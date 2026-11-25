@@ -1,0 +1,132 @@
+---
+// The live map (S08). Settings: src/data/map.yaml. Code: src/scripts/map/. Frames come
+// straight from R2 (data.precip.science), written by the pipeline repo's live/ jobs.
+import Base from "../layouts/Base.astro";
+import Credits from "../components/Credits.astro";
+import { MAP } from "../lib/map";
+import "../styles/map.css";
+
+const config = {
+  index: MAP.data.index,
+  catalog: MAP.data.catalog,
+  basemap: MAP.basemap,
+  defaultLayer: MAP.default_layer,
+  windows: MAP.windows.map((w) => ({ hours: w.hours, step: w.step_minutes })),
+  staleMin: MAP.stale_after_minutes,
+};
+const groups = [
+  { name: "EcConus 2D", layers: [{ id: "echo_type", label: "Echo type" }, { id: "convectivity", label: "Convectivity" }] },
+  { name: "MRMS", layers: [{ id: "composite", label: "Reflectivity" }, { id: "precip_rate", label: "Precip rate" }, { id: "precip_flag", label: "Precip type" }] },
+];
+const icon = {
+  play: `<svg class="i-play" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M5 3.5v11l9-5.5z" fill="currentColor"/></svg><svg class="i-pause" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4.5 3.5h3v11h-3zM10.5 3.5h3v11h-3z" fill="currentColor"/></svg>`,
+  prev: `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 3.5h2v11H4zM15 3.5v11L7 9z" fill="currentColor"/></svg>`,
+  next: `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M12 3.5h2v11h-2zM3 3.5v11L11 9z" fill="currentColor"/></svg>`,
+};
+---
+<Base
+  title="Live map"
+  description="Live, experimental map of ECCO echo types and convectivity across the contiguous U.S., with MRMS reflectivity and precipitation layers, updated every 2 minutes."
+  app
+  noindex={!MAP.public}
+>
+  <div class="mapapp" data-state="loading" data-playing="false">
+    <div id="map" class="mapapp-map"></div>
+
+    <div class="map-top">
+      <form id="map-layers" class="map-card map-layers" aria-label="Map layer">
+        {groups.map((g) => (
+          <fieldset>
+            <legend>{g.name}</legend>
+            {g.layers.map((l) => (
+              <label class="map-choice"><input type="radio" name="layer" value={l.id} /><span>{l.label}</span></label>
+            ))}
+          </fieldset>
+        ))}
+        <fieldset class="map-qc" disabled title="A version that masks non-weather echo (QC on) is planned.">
+          <legend>QC</legend>
+          <label class="map-choice"><input type="radio" name="qc" value="off" checked /><span>Off</span></label>
+          <label class="map-choice"><input type="radio" name="qc" value="on" /><span>On <span class="muted">(planned)</span></span></label>
+        </fieldset>
+      </form>
+      <p id="map-banner" class="map-banner" role="status" hidden></p>
+    </div>
+
+    <aside id="map-panel" class="map-card map-panel" aria-labelledby="map-panel-h" hidden></aside>
+
+    <div class="map-bottom">
+      <div id="map-legend" class="map-card map-legend" aria-label="Legend"></div>
+      <div class="map-card map-timebar">
+        <div class="map-row">
+          <button id="map-play" type="button" class="map-btn map-btn-primary" aria-pressed="false" aria-label="Play" set:html={icon.play} />
+          <button id="map-prev" type="button" class="map-btn" aria-label="Previous frame" set:html={icon.prev} />
+          <button id="map-next" type="button" class="map-btn" aria-label="Next frame" set:html={icon.next} />
+          <div class="map-when">
+            <p id="map-time" class="map-time">Loading frames…</p>
+            <p id="map-age" class="map-age"></p>
+          </div>
+          <button id="map-latest" type="button" class="map-btn map-btn-text" aria-pressed="false">Latest</button>
+        </div>
+        <input id="map-slider" class="map-slider" type="range" min="0" max="0" value="0" step="1" aria-label="Frame time" />
+        <div class="map-row map-row-opts">
+          <form id="map-windows" class="map-seg" aria-label="Loop length">
+            {MAP.windows.map((w, i) => (
+              <label><input type="radio" name="loop" value={i} /><span>{w.hours} h</span></label>
+            ))}
+          </form>
+          <button id="map-speed" type="button" class="map-btn map-btn-text" aria-label="Speed: Normal">Normal</button>
+          <span id="map-loading" class="map-loading" role="status" hidden></span>
+          <button id="map-about-open" type="button" class="map-btn map-btn-text map-about-btn">About<span class="map-wide">&nbsp;this map</span></button>
+        </div>
+        <p class="map-notice"><strong>Experimental and unofficial.</strong> Not a forecast or warning: see <a href="https://www.weather.gov">weather.gov</a>.</p>
+        <p id="map-credits" class="map-credits"></p>
+        <p id="map-summary" class="map-summary" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="map-about" class="map-about" aria-labelledby="map-about-h">
+    <div class="map-about-head">
+      <h2 id="map-about-h">About this map</h2>
+      <button type="button" class="map-btn map-about-close" aria-label="Close">×</button>
+    </div>
+    <div class="prose">
+      <p><strong>Experimental and unofficial.</strong> Nothing here is a forecast or a warning. For warnings, see the National Weather Service at <a href="https://www.weather.gov">weather.gov</a>.</p>
+
+      <h3>Layers</h3>
+      <ul>
+        <li><strong>Echo type</strong> (<a href="/products/ecconus/">EcConus</a> 2D): ECCO’s stratiform, mixed and convective classes, from EccoPy 2D on each MRMS composite.</li>
+        <li><strong>Convectivity</strong>: ECCO’s texture-based convectivity, from 0 (stratiform) to 1 (convective). The color breaks at 0.4 and 0.5 are the class thresholds.</li>
+        <li><strong>Reflectivity</strong>: the MRMS composite, the strongest reflectivity in each column, from −10 to 70 dBZ.</li>
+        <li><strong>Precip rate</strong>: MRMS PrecipRate, 0.1 to 100 mm/h on a logarithmic scale.</li>
+        <li><strong>Precip type</strong>: MRMS PrecipFlag, the precipitation type at the surface.</li>
+      </ul>
+
+      <h3>Reading the map</h3>
+      <ul>
+        <li>Times are frame times in UTC, then your local time. Frames come about 2 minutes apart and appear 2 to 4 minutes after their time.</li>
+        <li>A light wash marks areas no radar covers. Inside coverage, a blank map means no echo.</li>
+        <li>Zoomed out, each pixel shows the strongest value (or the most convective class) in the area it covers, so storms don’t vanish at the national view. Zoom in for full resolution, about 1 km.</li>
+        <li>Hover over the map (or tap it) for the values at a point. Click or tap to pin the point and see its history over the loop.</li>
+        <li>The 6 h and 48 h loops skip frames to stay quick: every 6 minutes and every 30 minutes. Pause, then switch to 2 h, to see every frame around that time.</li>
+      </ul>
+
+      <h3>Keyboard</h3>
+      <ul class="map-keys">
+        <li><kbd>Space</kbd> or <kbd>K</kbd> play or pause</li>
+        <li><kbd>,</kbd> and <kbd>.</kbd> (or <kbd>J</kbd> and <kbd>L</kbd>) step back and forward</li>
+        <li><kbd>N</kbd> newest frame · <kbd>1</kbd>–<kbd>5</kbd> layers · <kbd>Esc</kbd> close the point panel · <kbd>?</kbd> this help</li>
+        <li>With the map focused, arrow keys move it and <kbd>+</kbd> and <kbd>−</kbd> zoom.</li>
+      </ul>
+
+      <h3>Data and credits</h3>
+      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) while that loads. The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License).</p>
+    </div>
+    <Credits ids={["mrms", "ecco", "eccopy"]} />
+  </dialog>
+
+  <script type="application/json" id="map-config" set:html={JSON.stringify(config)} />
+  <script>
+    import "../scripts/map/main.ts";
+  </script>
+</Base>

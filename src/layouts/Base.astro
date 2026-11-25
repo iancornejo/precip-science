@@ -7,10 +7,14 @@ import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import { SITE } from "../lib/site";
 
-interface Props { title?: string; description?: string }
+// app: a full-window page (the map) with a compact header, no footer and no page container.
+// noindex: ask search engines to skip the page (the map, until it's public).
+interface Props { title?: string; description?: string; app?: boolean; noindex?: boolean }
 const {
   title,
   description = "Experimental, unofficial radar products from NOAA's MRMS mosaic: ECCO echo classification, TITAN storm objects and microphysical fingerprints.",
+  app = false,
+  noindex = false,
 } = Astro.props;
 const fullTitle = title ? `${title} · ${SITE.name}` : `${SITE.name} · ${SITE.tagline}`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
@@ -40,12 +44,13 @@ const ogImage = new URL("/og.png", Astro.site);
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content={`${SITE.name}: ${SITE.tagline}`} />
     <meta name="twitter:card" content="summary_large_image" />
+    {noindex && <meta name="robots" content="noindex" />}
     <meta name="generator" content={Astro.generator} />
   </head>
-  <body>
+  <body class:list={{ "app-body": app }}>
     <a class="skip-link" href="#main">Skip to content</a>
-    <Header />
-    <main id="main" class="container"><slot /></main>
-    <Footer />
+    <Header compact={app} />
+    {app ? <main id="main" class="app-main"><slot /></main> : <main id="main" class="container"><slot /></main>}
+    {!app && <Footer />}
   </body>
 </html>

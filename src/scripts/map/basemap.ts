@@ -1,0 +1,129 @@
+// The basemap (D30) and its labels in Geom (D32).
+//
+// The preferred map is a Protomaps extract of OpenStreetMap on R2, drawn with the
+// @protomaps/basemaps style in Art glass colors and pared down for radar: land, water, a few
+// roads, borders and place names. Until that file is uploaded, or if it fails to load, a
+// small Natural Earth map (public domain) stands in. Either way the radar is drawn above the
+// land and water but below the roads, borders and labels, so they stay readable over echo.
+import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
+import { layers as protomapsLayers, namedFlavor, type Flavor } from "@protomaps/basemaps";
+
+export const PAPER = "#F3ECDE";
+const PAPER_DEEP = "#EDE3D1";
+const WATER = "#CBD3DE";
+const UMBER = "#2E241D";
+const UMBER_MUTED = "#66574A";
+const LINE = "#8C7B6B";
+const ROAD = "#CBBBA6";
+const WATER_TEXT = "#4B5E7E";
+
+const FONT = { regular: "geom-regular", medium: "geom-medium", bold: "geom-semibold", italic: "geom-italic" };
+
+export interface Basemap {
+  style: StyleSpecification;
+  radarBefore: string;      // radar layers go just under this layer
+  kind: "protomaps" | "standin";
+  attribution: string;
+}
+
+function artGlassFlavor(): Flavor {
+  const f: Flavor = { ...namedFlavor("light") };
+  delete f.pois;
+  delete f.landcover;
+  return {
+    ...f,
+    background: PAPER_DEEP, earth: PAPER, water: WATER,
+    highway: ROAD, major: ROAD, minor_a: "#DED3C3", minor_b: "#DED3C3",
+    boundaries: LINE,
+    roads_label_major: UMBER_MUTED, roads_label_major_halo: PAPER,
+    roads_label_minor: UMBER_MUTED, roads_label_minor_halo: PAPER,
+    ocean_label: WATER_TEXT,
+    city_label: UMBER, city_label_halo: PAPER,
+    subplace_label: UMBER_MUTED, subplace_label_halo: PAPER,
+    state_label: UMBER_MUTED, state_label_halo: PAPER,
+    country_label: UMBER_MUTED,
+    regular: FONT.regular, bold: FONT.bold, italic: FONT.italic,
+  };
+}
+
+// Kept from the Protomaps style; everything else (landcover, buildings, tunnels, icons, POIs,
+// minor labels) is dropped to keep the map quiet under the radar.
+const KEEP_BELOW = ["background", "earth", "water", "water_stream", "water_river"];
+const KEEP_ABOVE = ["roads_minor", "roads_major", "roads_highway", "boundaries_country", "boundaries",
+  "water_label_ocean", "water_label_lakes", "roads_labels_major", "places_region", "places_locality", "places_country"];
+
+function protomapsStyle(url: string, glyphs: string): Basemap {
+  const all = protomapsLayers("protomaps", artGlassFlavor(), { lang: "en" });
+  const byId = new Map(all.map((l) => [l.id, l]));
+  const pick = (ids: string[]) => ids.map((id) => byId.get(id)).filter(Boolean) as LayerSpecification[];
+  const above = pick(KEEP_ABOVE).map((l) => {
+    const layer = structuredClone(l) as LayerSpecification & { layout?: Record<string, unknown>; paint?: Record<string, unknown> };
+    if (layer.layout && "icon-image" in layer.layout) delete layer.layout["icon-image"];   // no sprite
+    if (layer.id === "boundaries_country") layer.paint = { ...layer.paint, "line-color": UMBER_MUTED, "line-width": 1 };
+    if (layer.id === "boundaries") layer.paint = { ...layer.paint, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.5, 8, 0.9] };
+    return layer as LayerSpecification;
+  });
+  const below = pick(KEEP_BELOW);
+  return {
+    kind: "protomaps",
+    radarBefore: above[0].id,
+    attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+    style: {
+      version: 8,
+      glyphs,
+      sources: {
+        protomaps: { type: "vector", url: `pmtiles://${url}`, attribution: "" },
+      },
+      layers: [...below, ...above],
+    },
+  };
+}
+
+function standinStyle(url: string, glyphs: string): Basemap {
+  const src = "standin";
+  const kind = (k: string) => ["==", ["get", "l"], k] as unknown as LayerSpecification["filter"];
+  return {
+    kind: "standin",
+    radarBefore: "standin-states",
+    attribution: 'Basemap: <a href="https://www.naturalearthdata.com">Natural Earth</a>',
+    style: {
+      version: 8,
+      glyphs,
+      sources: { [src]: { type: "geojson", data: url, attribution: "" } },
+      layers: [
+        { id: "standin-water", type: "background", paint: { "background-color": WATER } },
+        { id: "standin-land", type: "fill", source: src, filter: kind("land"), paint: { "fill-color": PAPER } },
+        { id: "standin-lakes", type: "fill", source: src, filter: kind("lake"), paint: { "fill-color": WATER } },
+        { id: "standin-states", type: "line", source: src, filter: kind("state"),
+          paint: { "line-color": LINE, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.5, 8, 1] } },
+        { id: "standin-countries", type: "line", source: src, filter: kind("country"),
+          paint: { "line-color": UMBER_MUTED, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.8, 8, 1.4] } },
+        { id: "standin-places", type: "symbol", source: src,
+          // Natural Earth's own min_zoom (256 px tiles) ranks the cities; MapLibre zooms run one lower
+          filter: ["all", kind("place"), ["<=", ["get", "mz"], ["+", ["zoom"], 1.3]]] as LayerSpecification["filter"],
+          layout: {
+            "text-field": ["get", "name"],
+            "text-font": ["step", ["get", "mz"], ["literal", [FONT.medium]], 4.5, ["literal", [FONT.regular]]],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 3, ["step", ["get", "mz"], 12.5, 4.5, 11], 8, ["step", ["get", "mz"], 15, 4.5, 13.5]],
+            "symbol-sort-key": ["get", "mz"],
+            "text-padding": 6,
+          },
+          paint: { "text-color": UMBER, "text-halo-color": PAPER, "text-halo-width": 1.4 },
+        } as LayerSpecification,
+      ],
+    },
+  };
+}
+
+/** Use the Protomaps extract if it answers within a few seconds, else the stand-in. */
+export async function basemap(opts: { pmtiles: string; standin: string; origin: string; probe: () => Promise<boolean> }): Promise<Basemap> {
+  const glyphs = `${opts.origin}/map/glyphs/{fontstack}/{range}.pbf`;
+  const standinUrl = new URL(opts.standin, opts.origin).href;
+  let ok = false;
+  try {
+    ok = await Promise.race([opts.probe(), new Promise<boolean>((r) => setTimeout(() => r(false), 4000))]);
+  } catch {
+    ok = false;
+  }
+  return ok ? protomapsStyle(opts.pmtiles, glyphs) : standinStyle(standinUrl, glyphs);
+}

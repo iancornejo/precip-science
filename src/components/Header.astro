@@ -1,21 +1,26 @@
 ---
-// precip.science header: the drop mark as the logo, the nav (D25: Products · About), and the
-// link back to Ian's personal site with its radar mark.
+// precip.science header: the drop mark as the logo, the nav (D25: Products · About; Map joins
+// first once src/data/map.yaml says public: true), and the link back to Ian's personal site
+// with its radar mark. compact: the slimmer version on the full-window map page.
 import DropMark from "./DropMark.astro";
 import RadarMark from "./RadarMark.astro";
 import Icon from "./Icon.astro";
 import { SITE } from "../lib/site";
+import { MAP } from "../lib/map";
 
+interface Props { compact?: boolean }
+const { compact = false } = Astro.props;
 const links = [
+  ...(MAP.public ? [{ href: "/map/", label: "Map" }] : []),
   { href: "/products/", label: "Products" },
   { href: "/about/", label: "About" },
 ];
 const path = Astro.url.pathname.replace(/index\.html$/, "");
 ---
-<div class="container">
+<div class:list={["container", { "header-compact": compact }]}>
 <header class="site-header">
   <a class="wordmark" href="/" aria-label={`${SITE.name}, home`}>
-    <DropMark size={24} />
+    <DropMark size={compact ? 20 : 24} />
     <span>{SITE.name}</span>
   </a>
   <nav aria-label="Main">
@@ -25,7 +30,7 @@ const path = Astro.url.pathname.replace(/index\.html$/, "");
       ))}
       <li>
         <a class="nav-home" href={SITE.ownerUrl}>
-          <RadarMark size={18} />{SITE.owner}<Icon name="external" size={12} />
+          <RadarMark size={18} /><span class="nav-home-name">{SITE.owner}</span><span class="nav-ext"><Icon name="external" size={12} /></span>
         </a>
       </li>
     </ul>
