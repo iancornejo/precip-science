@@ -5,7 +5,7 @@
 // roads, borders and place names. Until that file is uploaded, or if it fails to load, a
 // small Natural Earth map (public domain) stands in. Either way the radar is drawn above the
 // land and water but below the roads, borders and labels, so they stay readable over echo.
-import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
+import type { FilterSpecification, LayerSpecification, StyleSpecification } from "maplibre-gl";
 import { layers as protomapsLayers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 
 export const PAPER = "#F3ECDE";
@@ -18,6 +18,49 @@ const ROAD = "#CBBBA6";
 const WATER_TEXT = "#4B5E7E";
 
 const FONT = { regular: "geom-regular", medium: "geom-medium", bold: "geom-semibold", italic: "geom-italic" };
+
+// Optional terrain: a hillshade from the AWS-hosted Terrain Tiles (Mapzen, open data), drawn under
+// the radar and off until the reader turns it on.
+export const TERRAIN_LAYER = "terrain-hillshade";
+export const TERRAIN_CREDIT = 'Terrain: <a href="https://registry.opendata.aws/terrain-tiles/">Terrain Tiles</a> (Mapzen; SRTM, GMTED2010, ETOPO1, USGS 3DEP and others)';
+const TERRAIN_SOURCE = {
+  type: "raster-dem" as const,
+  tiles: ["https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png"],
+  encoding: "terrarium" as const,
+  tileSize: 256,
+  maxzoom: 11,
+  attribution: "",
+};
+const TERRAIN: LayerSpecification = {
+  id: TERRAIN_LAYER, type: "hillshade", source: "terrain",
+  layout: { visibility: "none" },
+  paint: {
+    "hillshade-exaggeration": 0.45,
+    "hillshade-shadow-color": "#5B4A3D",
+    "hillshade-highlight-color": "#FFFBF2",
+    "hillshade-accent-color": "#7A6A5C",
+    "hillshade-illumination-direction": 315,
+  },
+};
+
+/** A paper-colored halo under a line layer, so borders read over dark radar colors too. */
+function casing(l: LayerSpecification, extra = 1.8): LayerSpecification {
+  const c = structuredClone(l) as LayerSpecification & { paint?: Record<string, unknown> };
+  const w = c.paint?.["line-width"] ?? 1;
+  // zoom expressions must stay top-level, so widen an interpolate's stops rather than wrap it
+  const widen = (v: unknown): unknown => {
+    if (typeof v === "number") return v + extra;
+    if (Array.isArray(v) && v[0] === "interpolate") {
+      const out: unknown[] = v.slice(0, 3);
+      for (let i = 3; i < v.length; i += 2) out.push(v[i], typeof v[i + 1] === "number" ? v[i + 1] + extra : v[i + 1]);
+      return out;
+    }
+    return 2.5;
+  };
+  c.id = `${l.id}-casing`;
+  c.paint = { "line-color": PAPER, "line-opacity": 0.75, "line-width": widen(w) };
+  return c as LayerSpecification;
+}
 
 export interface Basemap {
   style: StyleSpecification;
@@ -63,7 +106,11 @@ function protomapsStyle(url: string, glyphs: string): Basemap {
     if (layer.id === "boundaries") layer.paint = { ...layer.paint, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.5, 8, 0.9] };
     return layer as LayerSpecification;
   });
-  const below = pick(KEEP_BELOW);
+  const below = [...pick(KEEP_BELOW), TERRAIN];
+  for (const id of ["boundaries", "boundaries_country"]) {
+    const i = above.findIndex((l) => l.id === id);
+    if (i >= 0) above.splice(i, 0, casing(above[i]));
+  }
   return {
     kind: "protomaps",
     radarBefore: above[0].id,
@@ -73,6 +120,7 @@ function protomapsStyle(url: string, glyphs: string): Basemap {
       glyphs,
       sources: {
         protomaps: { type: "vector", url: `pmtiles://${url}`, attribution: "" },
+        terrain: TERRAIN_SOURCE,
       },
       layers: [...below, ...above],
     },
@@ -81,26 +129,31 @@ function protomapsStyle(url: string, glyphs: string): Basemap {
 
 function standinStyle(url: string, glyphs: string): Basemap {
   const src = "standin";
-  const kind = (k: string) => ["==", ["get", "l"], k] as unknown as LayerSpecification["filter"];
+  const kind = (k: string) => ["==", ["get", "l"], k] as unknown as FilterSpecification;
   return {
     kind: "standin",
-    radarBefore: "standin-states",
+    radarBefore: "standin-states-casing",
     attribution: 'Basemap: <a href="https://www.naturalearthdata.com">Natural Earth</a>',
     style: {
       version: 8,
       glyphs,
-      sources: { [src]: { type: "geojson", data: url, attribution: "" } },
+      sources: { [src]: { type: "geojson", data: url, attribution: "" }, terrain: TERRAIN_SOURCE },
       layers: [
         { id: "standin-water", type: "background", paint: { "background-color": WATER } },
         { id: "standin-land", type: "fill", source: src, filter: kind("land"), paint: { "fill-color": PAPER } },
         { id: "standin-lakes", type: "fill", source: src, filter: kind("lake"), paint: { "fill-color": WATER } },
+        TERRAIN,
+        { id: "standin-states-casing", type: "line", source: src, filter: kind("state"),
+          paint: { "line-color": PAPER, "line-opacity": 0.75, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.2, 8, 2.8] } },
+        { id: "standin-countries-casing", type: "line", source: src, filter: kind("country"),
+          paint: { "line-color": PAPER, "line-opacity": 0.75, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.6, 8, 3.2] } },
         { id: "standin-states", type: "line", source: src, filter: kind("state"),
-          paint: { "line-color": LINE, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.5, 8, 1] } },
+          paint: { "line-color": LINE, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.6, 8, 1] } },
         { id: "standin-countries", type: "line", source: src, filter: kind("country"),
           paint: { "line-color": UMBER_MUTED, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.8, 8, 1.4] } },
         { id: "standin-places", type: "symbol", source: src,
           // Natural Earth's own min_zoom (256 px tiles) ranks the cities; MapLibre zooms run one lower
-          filter: ["all", kind("place"), ["<=", ["get", "mz"], ["+", ["zoom"], 1.3]]] as LayerSpecification["filter"],
+          filter: ["all", kind("place"), ["<=", ["get", "mz"], ["+", ["zoom"], 1.3]]] as FilterSpecification,
           layout: {
             "text-field": ["get", "name"],
             "text-font": ["step", ["get", "mz"], ["literal", [FONT.medium]], 4.5, ["literal", [FONT.regular]]],

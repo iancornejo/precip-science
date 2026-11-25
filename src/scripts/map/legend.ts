@@ -14,10 +14,19 @@ function tick(v: number): string {
   return formatNumber(v, 1);
 }
 
-export function legendHtml(title: string, p: Palette, note: string | null): string {
+export function legendHtml(title: string, p: Palette, choices: { id: string; label: string }[]): string {
   const L = p.legend;
   let body: string;
-  if (L.kind === "categorical") {
+  if (L.kind === "binned") {
+    const n = L.colors.length;
+    const boxes = L.colors.map((c) => `<span style="background:${c}"></span>`).join("");
+    const ticks = L.edges
+      .map((v, i) => (L.labels.includes(v) ? `<span style="left:${((i / n) * 100).toFixed(2)}%">${tick(v)}</span>` : ""))
+      .join("");
+    body = `<div class="map-bins" aria-hidden="true">${boxes}</div>
+      <div class="map-ticks map-ticks-bins" aria-hidden="true">${ticks}</div>
+      <p class="visually-hidden">${n} classes from ${tick(L.edges[0])} to over ${tick(L.edges[n - 1])} ${esc(L.units)}.</p>`;
+  } else if (L.kind === "categorical") {
     body = `<ul class="map-legend-items">${L.items
       .map((i) => `<li><span class="swatch" style="background:${i.color}"></span>${esc(i.label)}</li>`)
       .join("")}</ul>`;
@@ -39,7 +48,12 @@ export function legendHtml(title: string, p: Palette, note: string | null): stri
       ${bands ? `<div class="map-bands" aria-hidden="true">${bands}</div>` : ""}
       <p class="visually-hidden">Scale from ${tick(L.min)} to ${tick(L.max)} ${esc(L.units)}${log ? ", logarithmic" : ""}.</p>`;
   }
-  const units = L.kind === "continuous" && L.units ? ` <span class="muted">(${esc(L.units)})</span>` : "";
-  return `<p class="map-legend-title">${esc(title)}${units}</p>${body}
-    <p class="map-legend-foot"><span class="swatch swatch-nocov"></span>No radar coverage${note ? ` · <span class="map-legend-note">${esc(note)}</span>` : ""}</p>`;
+  const units = L.kind !== "categorical" && L.units ? ` <span class="muted">(${esc(L.units)})</span>` : "";
+  const swap = choices.length > 1
+    ? `<span class="map-pal" role="radiogroup" aria-label="Colors">${choices
+        .map((c) => `<button type="button" role="radio" class="map-pal-btn" data-pal="${c.id}" aria-checked="${c.id === p.id}">${esc(c.label)}</button>`)
+        .join("")}</span>`
+    : "";
+  return `<div class="map-legend-head"><p class="map-legend-title">${esc(title)}${units}</p>${swap}</div>${body}
+    <p class="map-legend-foot"><span class="swatch swatch-nocov"></span>No radar coverage</p>`;
 }

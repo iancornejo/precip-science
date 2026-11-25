@@ -43,6 +43,10 @@ const icon = {
             ))}
           </fieldset>
         ))}
+        <fieldset class="map-extras">
+          <legend>Map</legend>
+          <label class="map-choice"><input id="map-terrain" type="checkbox" /><span>Terrain</span></label>
+        </fieldset>
         <fieldset class="map-qc" disabled title="A version that masks non-weather echo (QC on) is planned.">
           <legend>QC</legend>
           <label class="map-choice"><input type="radio" name="qc" value="off" checked /><span>Off</span></label>
@@ -57,6 +61,17 @@ const icon = {
     <div class="map-bottom">
       <div id="map-legend" class="map-card map-legend" aria-label="Legend"></div>
       <div class="map-card map-timebar">
+        <form id="map-goto" class="map-goto" hidden>
+          <label for="map-goto-time">Show the 2-hour loop ending at <span class="muted">(your local time; any time in the last 48 h)</span></label>
+          <div class="map-row">
+            <input id="map-goto-time" type="datetime-local" step="60" required />
+            <span id="map-goto-utc" class="map-goto-utc"></span>
+          </div>
+          <div class="map-row">
+            <button type="submit" class="map-btn map-btn-primary map-btn-text">Show loop</button>
+            <button type="button" class="map-btn map-btn-text map-goto-cancel">Cancel</button>
+          </div>
+        </form>
         <div class="map-row">
           <button id="map-play" type="button" class="map-btn map-btn-primary" aria-pressed="false" aria-label="Play" set:html={icon.play} />
           <button id="map-prev" type="button" class="map-btn" aria-label="Previous frame" set:html={icon.prev} />
@@ -74,7 +89,15 @@ const icon = {
               <label><input type="radio" name="loop" value={i} /><span>{w.hours} h</span></label>
             ))}
           </form>
-          <button id="map-speed" type="button" class="map-btn map-btn-text" aria-label="Speed: Normal">Normal</button>
+          <button id="map-goto-open" type="button" class="map-btn map-btn-text" aria-expanded="false" aria-controls="map-goto"><span class="map-wide">Pick time</span><span class="map-narrow">Time</span></button>
+          <label class="map-speed"><span>Speed</span>
+            <select id="map-speed">
+              <option value="0">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="3">4×</option>
+            </select>
+          </label>
           <span id="map-loading" class="map-loading" role="status" hidden></span>
           <button id="map-about-open" type="button" class="map-btn map-btn-text map-about-btn">About<span class="map-wide">&nbsp;this map</span></button>
         </div>
@@ -108,19 +131,21 @@ const icon = {
         <li>A light wash marks areas no radar covers. Inside coverage, a blank map means no echo.</li>
         <li>Zoomed out, each pixel shows the strongest value (or the most convective class) in the area it covers, so storms don’t vanish at the national view. Zoom in for full resolution, about 1 km.</li>
         <li>Hover over the map (or tap it) for the values at a point. Click or tap to pin the point and see its history over the loop.</li>
-        <li>The 6 h and 48 h loops skip frames to stay quick: every 6 minutes and every 30 minutes. Pause, then switch to 2 h, to see every frame around that time.</li>
+        <li>The 6 h and 48 h loops skip frames to stay quick: every 6 minutes and every 30 minutes. For every frame of any 2 hours in the last 48, use <strong>Pick time</strong>, or pause a long loop and switch to 2 h.</li>
+        <li>Some layers offer two color sets; the switch beside the legend title swaps them, and this browser remembers the choice.</li>
+        <li><strong>Terrain</strong> adds shaded relief under the radar.</li>
       </ul>
 
       <h3>Keyboard</h3>
       <ul class="map-keys">
         <li><kbd>Space</kbd> or <kbd>K</kbd> play or pause</li>
         <li><kbd>,</kbd> and <kbd>.</kbd> (or <kbd>J</kbd> and <kbd>L</kbd>) step back and forward</li>
-        <li><kbd>N</kbd> newest frame · <kbd>1</kbd>–<kbd>5</kbd> layers · <kbd>Esc</kbd> close the point panel · <kbd>?</kbd> this help</li>
+        <li><kbd>N</kbd> newest frame · <kbd>T</kbd> pick a time · <kbd>1</kbd>–<kbd>5</kbd> layers · <kbd>Esc</kbd> close the point panel · <kbd>?</kbd> this help</li>
         <li>With the map focused, arrow keys move it and <kbd>+</kbd> and <kbd>−</kbd> zoom.</li>
       </ul>
 
       <h3>Data and credits</h3>
-      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) while that loads. The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License).</p>
+      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) while that loads. Shaded relief, when on, comes from the Terrain Tiles open dataset on AWS (Mapzen; SRTM, GMTED2010, ETOPO1, USGS 3DEP and others). The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License).</p>
     </div>
     <Credits ids={["mrms", "ecco", "eccopy"]} />
   </dialog>

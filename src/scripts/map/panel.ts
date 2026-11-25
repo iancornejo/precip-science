@@ -80,6 +80,7 @@ export class PointPanel {
     this.pinned = false;
     this.token++;
     this.el.hidden = true;
+    this.el.dataset.tab = "now";
   }
 
   /** Values at (lon, lat) for the time on screen; with `pinned`, the loop's history too. */
@@ -102,16 +103,30 @@ export class PointPanel {
     if (token !== this.token) return;
     const key = `${lon.toFixed(4)},${lat.toFixed(4)},${ctx.windowLabel},${ctx.loop("convectivity").length}`;
     const keepSeries = pinned && key === this.seriesKey && this.seriesData;
+    const tab = this.el.dataset.tab === "history" ? "history" : "now";
     this.el.innerHTML = `
       <div class="map-panel-head">
         <h2 id="map-panel-h">${pinned ? "Pinned point" : "Under the pointer"}</h2>
         <button type="button" class="map-btn map-panel-close" aria-label="Close the point panel">×</button>
       </div>
-      <p class="map-panel-where">${latlon(lon, lat)}<br><span class="muted">${stamp(ctx.t).html}</span></p>
-      <dl class="map-values">${rows.map((r) => `<div><dt>${LAYERS[r.layer].label}</dt><dd>${r.html}${r.at ? ` <span class="muted">(${utcClock(r.at)})</span>` : ""}</dd></div>`).join("")}</dl>
-      <div class="map-series">${pinned
+      <p class="map-panel-where"><span>${latlon(lon, lat)}</span> <span class="muted">${stamp(ctx.t).html}</span></p>
+      ${pinned ? `<div class="map-panel-tabs" role="tablist" aria-label="Point details">
+        <button type="button" role="tab" data-tab="now" aria-selected="${tab === "now"}">Now</button>
+        <button type="button" role="tab" data-tab="history" aria-selected="${tab === "history"}">Last ${esc(ctx.windowLabel)}</button>
+      </div>` : ""}
+      <div class="map-panel-now" role="tabpanel">
+        <dl class="map-values">${rows.map((r) => `<div><dt>${LAYERS[r.layer].label}</dt><dd>${r.html}${r.at ? ` <span class="muted">(${utcClock(r.at)})</span>` : ""}</dd></div>`).join("")}</dl>
+      </div>
+      <div class="map-series" role="tabpanel">${pinned
         ? (keepSeries ? this.seriesHtml(ctx) : `<p class="muted">Loading the last ${esc(ctx.windowLabel)}…</p>`)
         : `<p class="muted">Click or tap the map to pin a point and see its last ${esc(ctx.windowLabel)}.</p>`}</div>`;
+    this.el.dataset.pinned = String(pinned);
+    this.el.dataset.tab = tab;
+    this.el.querySelectorAll<HTMLButtonElement>(".map-panel-tabs [role=tab]").forEach((b) =>
+      b.addEventListener("click", () => {
+        this.el.dataset.tab = b.dataset.tab!;
+        this.el.querySelectorAll(".map-panel-tabs [role=tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+      }));
     this.el.hidden = false;
     this.el.querySelector(".map-panel-close")?.addEventListener("click", () => { this.hide(); this.onClose(); });
     if (pinned && !keepSeries) {

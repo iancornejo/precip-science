@@ -17,12 +17,12 @@ distances under full-severity deutan, protan and tritan simulations) for the cla
 
 | Layer | Colors | Source |
 | --- | --- | --- |
-| Echo type, convectivity | EccoPy's defaults (D09); `?palette=artglass` shows the S02 Art glass draft | `eccopy.core.colormaps` |
+| Echo type, convectivity | EccoPy's defaults (D09), or the S02 Art glass draft from the legend's switch (or `?palette=artglass`) | `eccopy.core.colormaps` |
 | Composite reflectivity | ChaseSpectral, −10 to 70 dBZ (D10) | cmweather |
-| Precipitation rate | viridis reversed, 0.1–100 mm/h, log scale | matplotlib |
+| Precipitation rate | QPE bins from Ian's studies (0.1–200 mm/h, 16 bins; the first gray darkened to show on the paper basemap), or viridis reversed, 0.1–100 mm/h, log, from the legend's switch | this script, matplotlib |
 | Precipitation type | seven MRMS PrecipFlag classes, every pair ≥ 17 apart under all three simulations | this script |
 
-Codes 0 (no echo) are clear, 254 (missing) and 255 (no coverage) get a light umber wash.
+The legend's switch remembers the choice per layer in the browser (`localStorage`). Codes 0 (no echo) are clear, 254 (missing) and 255 (no coverage) get a light umber wash.
 
 ## Map labels in Geom (D32): `public/map/glyphs/`
 

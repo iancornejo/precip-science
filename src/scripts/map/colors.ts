@@ -7,17 +7,19 @@ export interface LegendItem { label: string; color: string }
 export interface LegendStop { v: number; color: string }
 export type Legend =
   | { kind: "categorical"; items: LegendItem[] }
+  | { kind: "binned"; units: string; edges: number[]; colors: string[]; labels: number[] }
   | { kind: "continuous"; scale: "linear" | "log"; min: number; max: number; units: string;
       stops: LegendStop[]; ticks: number[]; bands?: { from: number; to: number; label: string }[] };
 
 export interface Palette {
   id: string;
+  label: string;
   rgba: Uint8Array;                     // 256 x RGBA
   chunks: { plte: Uint8Array; trns: Uint8Array };
   legend: Legend;
 }
 
-type Raw = { layers: Record<string, { default: string; palettes: Record<string, { lut: string; legend: Legend }> }> };
+type Raw = { layers: Record<string, { default: string; palettes: Record<string, { label: string; lut: string; legend: Legend }> }> };
 const raw = data as unknown as Raw;
 
 function hexToBytes(hex: string): Uint8Array {
@@ -36,7 +38,7 @@ export function palette(layer: LayerId, wanted?: string | null): Palette {
   let p = cache.get(key);
   if (!p) {
     const rgba = hexToBytes(entry.palettes[id].lut);
-    p = { id, rgba, chunks: paletteChunks(rgba), legend: entry.palettes[id].legend };
+    p = { id, label: entry.palettes[id].label, rgba, chunks: paletteChunks(rgba), legend: entry.palettes[id].legend };
     cache.set(key, p);
   }
   return p;
@@ -44,6 +46,13 @@ export function palette(layer: LayerId, wanted?: string | null): Palette {
 
 export function isDefaultPalette(layer: LayerId, id: string): boolean {
   return raw.layers[layer].default === id;
+}
+
+/** The palettes a layer offers, default first: [{id, label}]. */
+export function paletteChoices(layer: LayerId): { id: string; label: string }[] {
+  const e = raw.layers[layer];
+  const ids = [e.default, ...Object.keys(e.palettes).filter((k) => k !== e.default)];
+  return ids.map((id) => ({ id, label: e.palettes[id].label }));
 }
 
 export function cssColor(p: Palette, code: number): string {

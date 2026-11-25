@@ -2,17 +2,17 @@
 //
 // Frames are PMTiles of 8-bit codes (D28). A custom "frame://" protocol reads a tile through
 // the block cache (blocks.ts), gives it the layer's palette (png.ts) and hands MapLibre a
-// colored PNG. Two raster sources take turns: the next frame loads into the hidden one and
-// the two swap once it's complete, so playback never shows a half-drawn frame.
+// colored PNG. Two raster sources take turns: the next frame loads into the hidden one, which
+// then fades in on top of the current one, so playback never shows a half-drawn frame.
 import * as maplibregl from "maplibre-gl";
 import type { RasterTileSource, RequestParameters } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { PMTiles, Protocol } from "pmtiles";
 
-import { basemap, type Basemap } from "./basemap";
+import { basemap, TERRAIN_CREDIT, TERRAIN_LAYER, type Basemap } from "./basemap";
 import { stats, tileBytes, reader } from "./blocks";
-import { palette, isDefaultPalette, type Palette } from "./colors";
+import { palette, paletteChoices, type Palette } from "./colors";
 import { FrameStore, type Frame } from "./frames";
 import { LAYERS, LAYER_ORDER, NO_COVERAGE, type LayerId } from "./layers";
 import { legendHtml } from "./legend";
@@ -44,9 +44,8 @@ const store = new FrameStore(
   dataOverride ? new URL("live/catalog.json", dataOverride).href : cfg.catalog,
   dataOverride ?? undefined,
 );
-const paletteChoice = params.get("palette");         // ?palette=artglass: the draft Art glass ECCO colors
 const OPACITY = 0.9;
-const SPEEDS = [{ label: "Slow", ms: 900 }, { label: "Normal", ms: 450 }, { label: "Fast", ms: 200 }];
+const SPEEDS = [900, 450, 225, 110];     // ms per frame: 0.5x, 1x, 2x, 4x (the last frame stays 3x as long)
 
 // ---------------------------------------------------------------- state
 const state = {
@@ -58,7 +57,17 @@ const state = {
   playing: false,
   speed: 1,
   grid: null as ViewBox | null,
+  pal: {} as Partial<Record<LayerId, string>>,   // color choice per layer (the legend's switch)
+  terrain: false,
 };
+
+// Remembered in this browser only; storage can be missing or refuse, which is fine.
+try { Object.assign(state.pal, JSON.parse(localStorage.getItem("precip-map-colors") ?? "{}")); } catch { /* none */ }
+const urlPalette = params.get("palette");               // ?palette=artglass: Art glass ECCO colors
+if (urlPalette) for (const l of ["echo_type", "convectivity"] as LayerId[]) state.pal[l] = urlPalette;
+function savePalettes() {
+  try { localStorage.setItem("precip-map-colors", JSON.stringify(state.pal)); } catch { /* none */ }
+}
 
 function readHash() {
   const h = new URLSearchParams(location.hash.slice(1));
@@ -76,8 +85,7 @@ function writeHash() {
   history.replaceState(null, "", `${location.pathname}${location.search}#${h.toString().replace(/%2F/g, "/")}`);
 }
 
-const pal = (layer: LayerId): Palette =>
-  palette(layer, layer === "echo_type" || layer === "convectivity" ? paletteChoice : null);
+const pal = (layer: LayerId): Palette => palette(layer, state.pal[layer] ?? null);
 
 // ---------------------------------------------------------------- the frame protocol
 let noCov: Uint8Array | null = null;
@@ -133,9 +141,21 @@ async function createMap() {
     hash: "view",
     attributionControl: false,      // credits sit in the time bar instead (#map-credits), always visible
   });
-  $<HTMLElement>("#map-credits").innerHTML =
-    `Radar: <a href="https://www.nssl.noaa.gov/projects/mrms/">NOAA MRMS</a>, processed here, not endorsed by NOAA · ` +
-    `ECCO via <a href="https://github.com/iancornejo/EccoPy">EccoPy</a> · ${base.attribution}`;
+  // With no view in the link, fit the lower 48 between the cards along the top and bottom.
+  if (!/(^|[#&])view=/.test(location.hash)) {
+    map.once("load", () => {
+      const top = (document.querySelector(".map-top") as HTMLElement).getBoundingClientRect();
+      const bot = (document.querySelector(".map-bottom") as HTMLElement).getBoundingClientRect();
+      const box = map.getContainer().getBoundingClientRect();
+      const pad = {
+        top: Math.max(20, top.bottom - box.top + 8),
+        bottom: Math.max(20, box.bottom - bot.top + 8),
+        left: 16, right: 16,
+      };
+      if (pad.top + pad.bottom < box.height - 120) map.fitBounds([[-125, 24.5], [-66.5, 49.5]], { padding: pad, animate: false });
+    });
+  }
+  renderCredits();
   map.getCanvas().setAttribute("aria-label", "Radar map. The time controls below it carry a text summary of the frame.");
   map.touchZoomRotate.disableRotation();
   map.keyboard.disableRotation();
@@ -152,7 +172,12 @@ const ui = {
   prev: $<HTMLButtonElement>("#map-prev"),
   next: $<HTMLButtonElement>("#map-next"),
   latest: $<HTMLButtonElement>("#map-latest"),
-  speed: $<HTMLButtonElement>("#map-speed"),
+  speed: $<HTMLSelectElement>("#map-speed"),
+  gotoOpen: $<HTMLButtonElement>("#map-goto-open"),
+  gotoForm: $<HTMLFormElement>("#map-goto"),
+  gotoTime: $<HTMLInputElement>("#map-goto-time"),
+  gotoUtc: $<HTMLElement>("#map-goto-utc"),
+  terrain: $<HTMLInputElement>("#map-terrain"),
   slider: $<HTMLInputElement>("#map-slider"),
   time: $<HTMLElement>("#map-time"),
   age: $<HTMLElement>("#map-age"),
@@ -165,8 +190,74 @@ const ui = {
   about: $<HTMLDialogElement>("#map-about"),
   aboutOpen: $<HTMLButtonElement>("#map-about-open"),
 };
-const panel = new PointPanel($<HTMLElement>("#map-panel"), () => { pinned = null; });
+const panel = new PointPanel($<HTMLElement>("#map-panel"), () => unpin());
 let pinned: { lon: number; lat: number } | null = null;
+let pinMarker: maplibregl.Marker | null = null;
+
+function renderCredits() {
+  $<HTMLElement>("#map-credits").innerHTML =
+    `Radar: <a href="https://www.nssl.noaa.gov/projects/mrms/">NOAA MRMS</a>, processed here, not endorsed by NOAA · ` +
+    `ECCO via <a href="https://github.com/iancornejo/EccoPy">EccoPy</a> · ${base.attribution}` +
+    (state.terrain ? ` · ${TERRAIN_CREDIT}` : "");
+}
+
+/** A crosshair on the pinned point, so it's clear which spot the panel describes. */
+function pin(lon: number, lat: number) {
+  pinned = { lon, lat };
+  if (!pinMarker) {
+    const el = document.createElement("div");
+    el.className = "map-pin";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML = `<svg width="34" height="34" viewBox="0 0 34 34"><g fill="none" stroke-linecap="round">
+      <g stroke="#F7F2E8" stroke-width="5"><circle cx="17" cy="17" r="7"/><path d="M17 2v7M17 25v7M2 17h7M25 17h7"/></g>
+      <g stroke="#2E241D" stroke-width="2"><circle cx="17" cy="17" r="7"/><path d="M17 2v7M17 25v7M2 17h7M25 17h7"/></g></g></svg>`;
+    pinMarker = new maplibregl.Marker({ element: el });
+  }
+  pinMarker.setLngLat([lon, lat]).addTo(map);
+  panel.show(panelContext(), lon, lat, true);
+  settlePin();
+}
+
+function unpin() {
+  pinned = null;
+  pinMarker?.remove();
+  panel.hide();
+}
+
+/**
+ * Pan the map, if need be, so the crosshair isn't hidden under the panel or a card. It acts for a
+ * few seconds after a pin or a tab switch (the panel grows as its values and history arrive), and
+ * stops as soon as the reader moves the map themselves.
+ */
+let pinSettleUntil = 0;
+function keepPinVisible() {
+  if (!pinned || !panel.visible || performance.now() > pinSettleUntil) return;
+  const box = map.getContainer().getBoundingClientRect();
+  const pt = map.project([pinned.lon, pinned.lat]);
+  const x = box.left + pt.x, y = box.top + pt.y, m = 22;
+  const under = (r: DOMRect) => r.width > 0 && x > r.left - m && x < r.right + m && y > r.top - m && y < r.bottom + m;
+  const cards = [...document.querySelectorAll<HTMLElement>(".map-card")].map((c) => c.getBoundingClientRect());
+  if (!cards.some(under)) return;
+  const p = $<HTMLElement>("#map-panel").getBoundingClientRect();
+  let tx = x, ty = y;
+  if (p.width > box.width * 0.6) {
+    // Phones: the panel spans the map, so aim for the middle of the gap between it and the cards below.
+    const below = $<HTMLElement>(".map-bottom").getBoundingClientRect().top;
+    if (below - p.bottom < 3 * m) return;
+    ty = (p.bottom + below) / 2;
+  } else if (under(p)) {
+    tx = p.left - 3 * m;    // wider screens: just left of the panel
+  } else return;
+  map.panBy([x - tx, y - ty], { duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 300 });
+}
+function settlePin() {
+  pinSettleUntil = performance.now() + 4000;
+  requestAnimationFrame(() => keepPinVisible());
+}
+new ResizeObserver(() => keepPinVisible()).observe($<HTMLElement>("#map-panel"));
+$<HTMLElement>("#map-panel").addEventListener("click", (e) => {
+  if ((e.target as Element).closest("[role=tab]")) settlePin();
+});
 
 // ---------------------------------------------------------------- double-buffered frames
 let front = "radar-a";
@@ -189,8 +280,19 @@ function whenIdle(): Promise<void> {
   });
 }
 
-async function display(tpl: string): Promise<boolean> {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let chain: Promise<unknown> = Promise.resolve();
+
+/** Show a frame. Calls run one after another, and a call that's been overtaken skips. */
+function display(tpl: string, fadeMs = 0): Promise<boolean> {
   const gen = ++showGen;
+  const run = chain.then(() => swap(tpl, fadeMs, gen));
+  chain = run.catch(() => false);
+  return run;
+}
+
+async function swap(tpl: string, fadeMs: number, gen: number): Promise<boolean> {
+  if (gen !== showGen) return false;
   if (shown[front] === tpl) return true;
   const back = front === "radar-a" ? "radar-b" : "radar-a";
   if (shown[back] !== tpl) {
@@ -199,7 +301,11 @@ async function display(tpl: string): Promise<boolean> {
   }
   await whenIdle();
   if (gen !== showGen) return false;
+  map.moveLayer(back, base.radarBefore);                  // the incoming frame goes on top
+  map.setPaintProperty(back, "raster-opacity-transition", { duration: fadeMs, delay: 0 });
   map.setPaintProperty(back, "raster-opacity", OPACITY);
+  if (fadeMs > 0) await sleep(fadeMs);
+  map.setPaintProperty(front, "raster-opacity-transition", { duration: 0, delay: 0 });
   map.setPaintProperty(front, "raster-opacity", 0);
   front = back;
   return true;
@@ -237,7 +343,8 @@ const win = () => cfg.windows[state.win];
 const windowLabel = () => `${win().hours} h`;
 const current = (): Frame | undefined => state.loop[state.idx];
 
-function rebuildLoop(anchor: number | "latest") {
+/** The loop around `anchor`: centered on it, or ending at it (the time picker). */
+function rebuildLoop(anchor: number | "latest", mode: "center" | "end" = "center") {
   const latest = store.latest(state.layer);
   if (!latest) {
     state.loop = [];
@@ -245,7 +352,8 @@ function rebuildLoop(anchor: number | "latest") {
     return;
   }
   const w = win();
-  const end = anchor === "latest" ? latest.t : Math.min(latest.t, anchor + (w.hours * 3600e3) / 2);
+  const end = anchor === "latest" ? latest.t
+    : Math.min(latest.t, mode === "end" ? anchor : anchor + (w.hours * 3600e3) / 2);
   state.loop = store.window(state.layer, end, w.hours, w.step);
   if (!state.loop.length) state.loop = [latest];
   if (anchor === "latest") state.idx = state.loop.length - 1;
@@ -295,13 +403,13 @@ function setBanner(text: string | null) {
   ui.banner.textContent = text ?? "";
 }
 
-async function showIdx(i: number, announce = true) {
+async function showIdx(i: number, announce = true, fadeMs = 0) {
   if (!state.loop.length) return;
   state.idx = Math.max(0, Math.min(state.loop.length - 1, i));
   updateTimeUi();
   const f = current()!;
   await ensureRadar(f);
-  await display(template(f, state.layer));
+  await display(template(f, state.layer), fadeMs);
   if (announce && !state.playing) scheduleSummary();
   if (panel.visible) refreshPanel();
 }
@@ -326,10 +434,17 @@ function scheduleSummary() {
 }
 
 function renderLegend() {
-  const p = pal(state.layer);
-  const preview = (state.layer === "echo_type" || state.layer === "convectivity") && !isDefaultPalette(state.layer, p.id)
-    ? "Art glass preview colors" : null;
-  ui.legend.innerHTML = legendHtml(LAYERS[state.layer].title, p, preview);
+  ui.legend.innerHTML = legendHtml(LAYERS[state.layer].title, pal(state.layer), paletteChoices(state.layer));
+}
+
+/** The legend's color switch: the same frame, recolored. */
+async function setPalette(id: string) {
+  state.pal[state.layer] = id;
+  savePalettes();
+  renderLegend();
+  const f = current();
+  if (f) await display(template(f, state.layer));
+  if (panel.visible) refreshPanel();
 }
 
 function panelContext(): PanelContext {
@@ -354,7 +469,7 @@ function refreshPanel() {
 
 // ---------------------------------------------------------------- playback
 let playToken = 0;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 function zoomForTiles(): number {
   return Math.max(0, Math.min(7, Math.round(map.getZoom() + 1)));
@@ -402,10 +517,12 @@ async function play() {
   while (state.playing && token === playToken) {
     const t0 = performance.now();
     const next = (state.idx + 1) % state.loop.length;
-    await showIdx(next, false);
+    const ms = SPEEDS[state.speed];
+    // a cross-fade over part of each frame's time; none when jumping back to the start
+    const fade = next === 0 || reducedMotion.matches ? 0 : Math.round(Math.min(300, ms * 0.5));
+    await showIdx(next, false, fade);
     const last = state.idx === state.loop.length - 1;
-    const dwell = SPEEDS[state.speed].ms * (last ? 3 : 1);
-    await sleep(Math.max(30, dwell - (performance.now() - t0)));
+    await sleep(Math.max(30, ms * (last ? 3 : 1) - (performance.now() - t0)));
   }
 }
 
@@ -451,6 +568,70 @@ async function setLayer(layer: LayerId) {
   if (wasPlaying) play();
 }
 
+/** catalog.json (all 48 h), read at most every 10 minutes. */
+async function ensureCatalog(): Promise<boolean> {
+  if (Date.now() - store.catalogLoaded < 10 * 60e3) return true;
+  ui.loading.hidden = false;
+  ui.loading.textContent = "Loading the frame catalog…";
+  try {
+    await store.loadCatalog();
+    return true;
+  } catch (e) {
+    console.warn(e);
+    setBanner("Couldn't load the full frame catalog; only the last 2 hours are available.");
+    return false;
+  } finally {
+    ui.loading.hidden = true;
+  }
+}
+
+// ---------------------------------------------------------------- the time picker: a 2 h loop ending at any time online
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const toLocalInput = (t: number) => {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+
+async function openGoto() {
+  const open = ui.gotoForm.hidden;
+  ui.gotoForm.hidden = !open;
+  ui.gotoOpen.setAttribute("aria-expanded", String(open));
+  if (!open) return;
+  await ensureCatalog();
+  const all = store.all(state.layer);
+  if (!all.length) return;
+  ui.gotoTime.min = toLocalInput(all[0].t);
+  ui.gotoTime.max = toLocalInput(all[all.length - 1].t + 59e3);
+  ui.gotoTime.value = toLocalInput(current()?.t ?? all[all.length - 1].t);
+  showGotoUtc();
+  ui.gotoTime.focus();
+}
+
+function showGotoUtc() {
+  const t = new Date(ui.gotoTime.value).getTime();
+  ui.gotoUtc.textContent = Number.isFinite(t) ? `= ${stamp(t).text.split(" · ")[0]}` : "";
+}
+
+async function gotoTime(e: Event) {
+  e.preventDefault();
+  const t = new Date(ui.gotoTime.value).getTime();
+  if (!Number.isFinite(t)) return;
+  pause();
+  state.follow = false;
+  const two = cfg.windows.findIndex((w) => w.hours <= 2.01);
+  if (two >= 0) {
+    state.win = two;
+    (ui.windows.elements.namedItem("loop") as RadioNodeList).value = String(two);
+    writeHash();
+  }
+  rebuildLoop(t, "end");
+  state.idx = state.loop.length - 1;
+  ui.gotoForm.hidden = true;
+  ui.gotoOpen.setAttribute("aria-expanded", "false");
+  await showIdx(state.idx);
+  if (pinned) refreshPanel();
+}
+
 async function setWindow(i: number) {
   if (i === state.win) return;
   const t = current()?.t;
@@ -458,12 +639,7 @@ async function setWindow(i: number) {
   writeHash();
   const wasPlaying = state.playing;
   if (wasPlaying) pause();
-  if (win().hours > 2.01 && Date.now() - store.catalogLoaded > 10 * 60e3) {
-    ui.loading.hidden = false;
-    ui.loading.textContent = "Loading the frame catalog…";
-    try { await store.loadCatalog(); } catch (e) { console.warn(e); setBanner("Couldn't load the full frame catalog; showing the last 2 hours."); }
-    ui.loading.hidden = true;
-  }
+  if (win().hours > 2.01) await ensureCatalog();
   rebuildLoop(state.follow || t === undefined ? "latest" : t);
   await showIdx(state.idx);
   if (pinned) refreshPanel();
@@ -520,10 +696,23 @@ async function start() {
   ui.prev.addEventListener("click", () => step(-1));
   ui.next.addEventListener("click", () => step(1));
   ui.latest.addEventListener("click", () => goLatest());
-  ui.speed.addEventListener("click", () => {
-    state.speed = (state.speed + 1) % SPEEDS.length;
-    ui.speed.textContent = SPEEDS[state.speed].label;
-    ui.speed.setAttribute("aria-label", `Speed: ${SPEEDS[state.speed].label}`);
+  ui.speed.value = String(state.speed);
+  ui.speed.addEventListener("change", () => { state.speed = Number(ui.speed.value); });
+  ui.gotoOpen.addEventListener("click", () => openGoto());
+  ui.gotoForm.addEventListener("submit", gotoTime);
+  ui.gotoTime.addEventListener("input", showGotoUtc);
+  ui.gotoForm.querySelector(".map-goto-cancel")?.addEventListener("click", () => {
+    ui.gotoForm.hidden = true;
+    ui.gotoOpen.setAttribute("aria-expanded", "false");
+  });
+  ui.terrain.addEventListener("change", () => {
+    state.terrain = ui.terrain.checked;
+    map.setLayoutProperty(TERRAIN_LAYER, "visibility", state.terrain ? "visible" : "none");
+    renderCredits();
+  });
+  ui.legend.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-pal]");
+    if (b && b.getAttribute("aria-checked") !== "true") setPalette(b.dataset.pal!);
   });
   ui.slider.addEventListener("input", () => {
     pause();
@@ -550,10 +739,8 @@ async function start() {
     if (hoverTimer) clearTimeout(hoverTimer);
     if (!pinned) panel.hide();
   });
-  map.on("click", (e) => {
-    pinned = { lon: e.lngLat.lng, lat: e.lngLat.lat };
-    panel.show(panelContext(), pinned.lon, pinned.lat, true);
-  });
+  map.on("click", (e) => pin(e.lngLat.lng, e.lngLat.lat));
+  map.on("movestart", (e) => { if ((e as { originalEvent?: Event }).originalEvent) pinSettleUntil = 0; });
 
   document.addEventListener("keydown", (e) => {
     const t = e.target as HTMLElement;
@@ -571,7 +758,8 @@ async function start() {
       case ".": case "l": step(1); e.preventDefault(); break;
       case "n": goLatest(); break;
       case "?": ui.about.showModal(); break;
-      case "Escape": pinned = null; panel.hide(); break;
+      case "Escape": unpin(); break;
+      case "t": openGoto(); e.preventDefault(); break;
     }
   });
 
