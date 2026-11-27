@@ -2,9 +2,9 @@
 //
 // The preferred map is a Protomaps extract of OpenStreetMap on R2, drawn with the
 // @protomaps/basemaps style in Art glass colors and pared down for radar: land, water, a few
-// roads, borders and place names. Until that file is uploaded, or if it fails to load, a
-// small Natural Earth map (public domain) stands in. Either way the radar is drawn above the
-// land and water but below the roads, borders and labels, so they stay readable over echo.
+// roads, borders and place names. If that file fails to load, a small Natural Earth map
+// (public domain) stands in. Either way the radar is drawn above the land and water but below
+// the roads, coastlines, borders and labels, so they stay readable over echo.
 import type { FilterSpecification, LayerSpecification, StyleSpecification } from "maplibre-gl";
 import { layers as protomapsLayers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 
@@ -16,6 +16,11 @@ const UMBER_MUTED = "#66574A";
 const LINE = "#8C7B6B";
 const ROAD = "#CBBBA6";
 const WATER_TEXT = "#4B5E7E";
+// Coastlines and lake shores: a deep slate ink, cool where the borders are warm, so a coast
+// reads as a coast and not as one more border.
+const COAST = "#22354E";
+type LineWidth = NonNullable<Extract<LayerSpecification, { type: "line" }>["paint"]>["line-width"];
+const COAST_WIDTH: LineWidth = ["interpolate", ["linear"], ["zoom"], 3, 0.7, 8, 1.2];
 
 const FONT = { regular: "geom-regular", medium: "geom-medium", bold: "geom-semibold", italic: "geom-italic" };
 
@@ -92,14 +97,35 @@ function artGlassFlavor(): Flavor {
 // Kept from the Protomaps style; everything else (landcover, buildings, tunnels, icons, POIs,
 // minor labels) is dropped to keep the map quiet under the radar.
 const KEEP_BELOW = ["background", "earth", "water", "water_stream", "water_river"];
-const KEEP_ABOVE = ["roads_minor", "roads_major", "roads_highway", "boundaries_country", "boundaries",
-  "water_label_ocean", "water_label_lakes", "roads_labels_major", "places_region", "places_locality", "places_country"];
+const KEEP_ROADS = ["roads_minor", "roads_major", "roads_highway"];
+const KEEP_BORDERS = ["boundaries_country", "boundaries"];
+const KEEP_LABELS = ["water_label_ocean", "water_label_lakes", "roads_labels_major", "places_region", "places_locality", "places_country"];
+
+// The coast is the outline of the land polygons, so it matches the land and water exactly. Lake
+// shores are the outlines of the lakes in the extract's tiles up to zoom 5, which carry only
+// Natural Earth's major lakes (the Great Lakes, Great Salt Lake, Okeechobee, the big reservoirs);
+// from zoom 6 the water layer holds every OpenStreetMap pond, and outlining those would speckle
+// the radar. So from zoom 5 the shores come from a second view of the same file held to its
+// zoom-5 tiles, and up close they are a little generalized next to the water fill. (Below zoom
+// 5 the main source already has those tiles, so the second one stays idle there.)
+const LAKES: FilterSpecification = ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "lake"]];
+const COAST_LAYERS: LayerSpecification[] = [
+  { id: "coast", type: "line", source: "protomaps", "source-layer": "earth",
+    filter: ["==", ["geometry-type"], "Polygon"],
+    layout: { "line-join": "round" },
+    paint: { "line-color": COAST, "line-width": COAST_WIDTH } },
+  { id: "lake-shores", type: "line", source: "protomaps", "source-layer": "water", maxzoom: 5, filter: LAKES,
+    layout: { "line-join": "round" },
+    paint: { "line-color": COAST, "line-width": COAST_WIDTH } },
+  { id: "lake-shores-z5", type: "line", source: "protomaps-lakes", "source-layer": "water", minzoom: 5, filter: LAKES,
+    layout: { "line-join": "round" },
+    paint: { "line-color": COAST, "line-width": COAST_WIDTH } },
+];
 
 function protomapsStyle(url: string, glyphs: string): Basemap {
   const all = protomapsLayers("protomaps", artGlassFlavor(), { lang: "en" });
   const byId = new Map(all.map((l) => [l.id, l]));
-  const pick = (ids: string[]) => ids.map((id) => byId.get(id)).filter(Boolean) as LayerSpecification[];
-  const above = pick(KEEP_ABOVE).map((l) => {
+  const pick = (ids: string[]) => (ids.map((id) => byId.get(id)).filter(Boolean) as LayerSpecification[]).map((l) => {
     const layer = structuredClone(l) as LayerSpecification & { layout?: Record<string, unknown>; paint?: Record<string, unknown> };
     if (layer.layout && "icon-image" in layer.layout) delete layer.layout["icon-image"];   // no sprite
     if (layer.id === "boundaries_country") layer.paint = { ...layer.paint, "line-color": UMBER_MUTED, "line-width": 1 };
@@ -107,10 +133,9 @@ function protomapsStyle(url: string, glyphs: string): Basemap {
     return layer as LayerSpecification;
   });
   const below = [...pick(KEEP_BELOW), TERRAIN];
-  for (const id of ["boundaries", "boundaries_country"]) {
-    const i = above.findIndex((l) => l.id === id);
-    if (i >= 0) above.splice(i, 0, casing(above[i]));
-  }
+  // All the halos first, then all the lines, so no line is cut where another's halo crosses it.
+  const lines = [...COAST_LAYERS, ...pick(KEEP_BORDERS)];
+  const above = [...pick(KEEP_ROADS), ...lines.map((l) => casing(l)), ...lines, ...pick(KEEP_LABELS)];
   return {
     kind: "protomaps",
     radarBefore: above[0].id,
@@ -120,6 +145,8 @@ function protomapsStyle(url: string, glyphs: string): Basemap {
       glyphs,
       sources: {
         protomaps: { type: "vector", url: `pmtiles://${url}`, attribution: "" },
+        // the same file, read no deeper than zoom 5 (source options outrank the file's own maxzoom)
+        "protomaps-lakes": { type: "vector", url: `pmtiles://${url}`, maxzoom: 5, attribution: "" },
         terrain: TERRAIN_SOURCE,
       },
       layers: [...below, ...above],
@@ -132,7 +159,7 @@ function standinStyle(url: string, glyphs: string): Basemap {
   const kind = (k: string) => ["==", ["get", "l"], k] as unknown as FilterSpecification;
   return {
     kind: "standin",
-    radarBefore: "standin-states-casing",
+    radarBefore: "standin-coast-casing",
     attribution: 'Basemap: <a href="https://www.naturalearthdata.com">Natural Earth</a>',
     style: {
       version: 8,
@@ -143,10 +170,15 @@ function standinStyle(url: string, glyphs: string): Basemap {
         { id: "standin-land", type: "fill", source: src, filter: kind("land"), paint: { "fill-color": PAPER } },
         { id: "standin-lakes", type: "fill", source: src, filter: kind("lake"), paint: { "fill-color": WATER } },
         TERRAIN,
+        // coast: the land and lake outlines, without the edges of the clipping box (design/map/README.md)
+        { id: "standin-coast-casing", type: "line", source: src, filter: kind("coast"), layout: { "line-join": "round" },
+          paint: { "line-color": PAPER, "line-opacity": 0.75, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.5, 8, 3] } },
         { id: "standin-states-casing", type: "line", source: src, filter: kind("state"),
           paint: { "line-color": PAPER, "line-opacity": 0.75, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.2, 8, 2.8] } },
         { id: "standin-countries-casing", type: "line", source: src, filter: kind("country"),
           paint: { "line-color": PAPER, "line-opacity": 0.75, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.6, 8, 3.2] } },
+        { id: "standin-coast", type: "line", source: src, filter: kind("coast"), layout: { "line-join": "round" },
+          paint: { "line-color": COAST, "line-width": COAST_WIDTH } },
         { id: "standin-states", type: "line", source: src, filter: kind("state"),
           paint: { "line-color": LINE, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.6, 8, 1] } },
         { id: "standin-countries", type: "line", source: src, filter: kind("country"),

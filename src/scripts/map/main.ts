@@ -59,10 +59,13 @@ const state = {
   grid: null as ViewBox | null,
   pal: {} as Partial<Record<LayerId, string>>,   // color choice per layer (the legend's switch)
   terrain: false,
+  labels: true,               // the basemap's place, water and road names
 };
 
 // Remembered in this browser only; storage can be missing or refuse, which is fine.
 try { Object.assign(state.pal, JSON.parse(localStorage.getItem("precip-map-colors") ?? "{}")); } catch { /* none */ }
+const LABELS_KEY = "precip-map-labels";
+try { state.labels = localStorage.getItem(LABELS_KEY) !== "off"; } catch { /* none */ }
 const urlPalette = params.get("palette");               // ?palette=artglass: Art glass ECCO colors
 if (urlPalette) for (const l of ["echo_type", "convectivity"] as LayerId[]) state.pal[l] = urlPalette;
 function savePalettes() {
@@ -112,6 +115,13 @@ maplibregl.addProtocol("frame", frameTile);
 
 let map: maplibregl.Map;
 let base: Basemap;
+let labelLayers: string[] = [];
+
+function setLabels(on: boolean) {
+  state.labels = on;
+  for (const id of labelLayers) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+  try { localStorage.setItem(LABELS_KEY, on ? "on" : "off"); } catch { /* private mode */ }
+}
 
 async function createMap() {
   base = await basemap({
@@ -127,6 +137,12 @@ async function createMap() {
     },
   });
   app.dataset.basemap = base.kind;
+  // Every symbol layer is a basemap label (the radar layers are rasters), so hidden labels can be
+  // set in the style itself and never flash on at load.
+  labelLayers = base.style.layers.filter((l) => l.type === "symbol").map((l) => l.id);
+  if (!state.labels) {
+    for (const l of base.style.layers) if (l.type === "symbol") l.layout = { ...l.layout, visibility: "none" };
+  }
 
   map = new maplibregl.Map({
     container: "map",
@@ -181,6 +197,7 @@ const ui = {
   gotoTime: $<HTMLInputElement>("#map-goto-time"),
   gotoUtc: $<HTMLElement>("#map-goto-utc"),
   terrain: $<HTMLInputElement>("#map-terrain"),
+  labels: $<HTMLInputElement>("#map-labels"),
   slider: $<HTMLInputElement>("#map-slider"),
   time: $<HTMLElement>("#map-time"),
   age: $<HTMLElement>("#map-age"),
@@ -774,6 +791,8 @@ async function start() {
     map.setLayoutProperty(TERRAIN_LAYER, "visibility", state.terrain ? "visible" : "none");
     renderCredits();
   });
+  ui.labels.checked = state.labels;
+  ui.labels.addEventListener("change", () => setLabels(ui.labels.checked));
   ui.legend.addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-pal]");
     if (b && b.getAttribute("aria-checked") !== "true") setPalette(b.dataset.pal!);

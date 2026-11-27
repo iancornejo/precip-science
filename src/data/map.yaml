@@ -18,7 +18,7 @@ data:
 # Natural Earth map stands in.
 basemap:
   pmtiles: https://data.precip.science/basemap/protomaps-conus-v1.pmtiles
-  standin: /map/basemap/standin-v1.json
+  standin: /map/basemap/standin-v2.json
 
 # The layer the map opens on: echo_type, convectivity, composite, precip_rate or precip_flag.
 default_layer: echo_type

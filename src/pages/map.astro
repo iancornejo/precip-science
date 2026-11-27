@@ -46,6 +46,7 @@ const icon = {
         ))}
         <fieldset class="map-extras">
           <legend>Map</legend>
+          <label class="map-choice"><input id="map-labels" type="checkbox" checked /><span>Labels</span></label>
           <label class="map-choice"><input id="map-terrain" type="checkbox" /><span>Terrain</span></label>
         </fieldset>
         <fieldset class="map-qc" disabled title="A version that masks non-weather echo (QC on) is planned.">
@@ -139,7 +140,8 @@ const icon = {
         <li>Hover over the map (or tap it) for the values at a point. Click or tap to pin the point and see its history over the loop.</li>
         <li>The 6 h and 48 h loops skip frames to stay quick: every 6 minutes and every 30 minutes. For every frame of any 2 hours in the last 48, use <strong>Pick time</strong>, or pause a long loop and switch to 2 h.</li>
         <li>Some layers offer two color sets; the switch beside the legend title swaps them, and this browser remembers the choice.</li>
-        <li><strong>Terrain</strong> adds shaded relief under the radar.</li>
+        <li>Coastlines and the shores of the big lakes are the slate lines over the radar; state and country borders are the brown ones.</li>
+        <li><strong>Labels</strong> shows or hides the basemap’s names (this browser remembers), and <strong>Terrain</strong> adds shaded relief under the radar.</li>
       </ul>
 
       <h3>Keyboard</h3>
@@ -151,7 +153,7 @@ const icon = {
       </ul>
 
       <h3>Data and credits</h3>
-      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) while that loads. Shaded relief, when on, comes from the Terrain Tiles open dataset on AWS (Mapzen; SRTM, GMTED2010, ETOPO1, USGS 3DEP and others). The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License).</p>
+      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) if that can’t load. Shaded relief, when on, comes from the Terrain Tiles open dataset on AWS (Mapzen; SRTM, GMTED2010, ETOPO1, USGS 3DEP and others). The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License).</p>
     </div>
     <Credits ids={["mrms", "ecco", "eccopy"]} />
   </dialog>

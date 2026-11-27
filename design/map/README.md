@@ -44,18 +44,30 @@ then each `out/Geom <Weight>/` folder, keeping only the ranges over 200 bytes (L
 Extended, Greek, Cyrillic, punctuation), becomes `public/map/glyphs/geom-<weight>/`. The map's
 styles name the fonts `geom-regular`, `geom-medium`, `geom-semibold` and `geom-italic`.
 
-## The stand-in basemap: `public/map/basemap/standin-v1.json`
+## The stand-in basemap: `public/map/basemap/standin-v2.json`
 
-Used until the Protomaps extract is on R2 (D30; the pipeline's RUNBOOK section 16), and if it
-ever fails to load. Natural Earth (public domain), clipped to 140–48° W, 14–62° N with
+Used if the Protomaps extract (D30; the pipeline's RUNBOOK section 16) fails to load, and with
+`?basemap=standin`. Natural Earth (public domain), clipped to 140–48° W, 14–62° N with
 mapshaper:
 
 - `ne_50m_land` (simplified to 40 %), `ne_50m_lakes`, `ne_50m_admin_0_boundary_lines_land`
 - `ne_50m_admin_1_states_provinces_lines` (U.S., Canada, Mexico)
 - `ne_10m_populated_places_simple` with `min_zoom` ≤ 7 (name and `mz`, Natural Earth's own zoom rank)
 
-merged into one GeoJSON with a property `l` (land, lake, country, state, place). About 450 KB,
-or about 130 KB as the browser downloads it.
+merged into one GeoJSON with a property `l` (land, lake, country, state, place); that was
+`standin-v1.json` (in git history). `standin_coast.py` then adds `coast`: the land and lake
+outlines as lines, without the edges of the clipping box, so the map can draw coastlines over
+the radar. About 680 KB, or about 165 KB gzipped.
+
+## Coastlines
+
+Drawn over the radar like the borders, in a slate ink of their own (`COAST` in
+`src/scripts/map/basemap.ts`). On the Protomaps map the coast is the outline of the `earth`
+polygons, so it matches the land and water fill exactly. Lake shores come from the same extract
+read no deeper than zoom 5, where the water layer holds only Natural Earth's major lakes; from
+zoom 6 it holds every OpenStreetMap pond. Up close the lake shores are therefore a little
+generalized beside the water fill. A sharper set would need its own file, for example the big
+lakes cut from the zoom-9 extract on the server.
 
 ## Testing locally
 
