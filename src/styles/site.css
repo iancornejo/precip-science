@@ -30,6 +30,9 @@
   color: var(--color-accent); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.45em;
 }
 .site-header .nav-home { gap: 8px; font-weight: var(--weight-bold); }
+/* With Map in the nav (M2), tighter gaps keep Map, Products, About and Ian's link on one line on phones. */
+@media (max-width: 420px) { .site-header ul { column-gap: var(--space-4); } }
+@media (max-width: 370px) { .site-header .nav-ext { display: none; } }
 
 main { padding-bottom: var(--space-10); }
 
@@ -64,6 +67,10 @@ a.link:hover, .prose a:hover, .intro a:hover, .credits a:hover, .notice a:hover,
 .stage-name { display: inline-flex; align-items: center; gap: 5px; margin-left: -1px; }
 .stage-lg { margin-top: var(--space-4); font-size: 0.8125rem; }
 .stage-lg > span { padding: 3px 9px; }
+.cta-row { margin-top: var(--space-6); }
+.cta { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-5); background: var(--umber); color: var(--paper); font-weight: 600; text-decoration: none; }
+.cta:hover { background: #4a3a2e; }
+.cta:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 
 /* ---------- home ---------- */
 .hero {

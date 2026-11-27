@@ -25,7 +25,7 @@ const classes = [
       <h1 id="hero-h">Echo classification, storm objects and microphysical fingerprints</h1>
       <p class="lead">Unofficial, experimental products built on NOAA’s MRMS radar mosaic with EccoPy and LROSE, by <a class="link" href={SITE.ownerUrl}>{SITE.owner}</a>.</p>
       {furthest && (
-        <a class="status-chip" href={`/products/${furthest.id}/`}>
+        <a class="status-chip" href={furthest.data.stage === "live" && furthest.data.map ? furthest.data.map : `/products/${furthest.id}/`}>
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill={STAGES[furthest.data.stage].color} /></svg>
           {furthest.data.title} · {STAGES[furthest.data.stage].label}
         </a>

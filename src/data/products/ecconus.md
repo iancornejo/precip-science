@@ -6,9 +6,11 @@
 #   stage:   live | in-development | planned | exploratory | feasibility-study
 #   summary: plain text; write Z_DR for Z with a subscript DR
 #   credits: ids from src/data/credits.yaml
+#   map:     the product's live map on this site (adds an "Open the live map" button)
 title: EcConus
 order: 1
-stage: in-development
+stage: live
+map: /map/
 icon: ecconus
 summary: >-
   ECCO echo types and convectivity across the contiguous United States, from NOAA's MRMS
@@ -56,4 +58,4 @@ EcConus runs ECCO over the contiguous United States (CONUS) in near real time, s
 
 ## Where it stands
 
-EcConus 2D is being built now, together with the map viewer that will show it. A 3D version, with echo types at every height (stratiform low, mid and high; convective elevated, shallow, mid and deep), comes later, once EccoPy 3D can handle the full MRMS volume within this project's computing budget.
+EcConus 2D is live: the [map](/map/) shows echo type and convectivity for the last 48 hours, next to the raw MRMS composite, rain rate and precipitation type. It updates every 2 minutes, a few minutes behind real time. A 3D version, with echo types at every height (stratiform low, mid and high; convective elevated, shallow, mid and deep), comes later, once EccoPy 3D can handle the full MRMS volume within this project's computing budget.

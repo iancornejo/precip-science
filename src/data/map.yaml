@@ -5,7 +5,7 @@
 
 # false: /map/ works but isn't in the menu or the sitemap, and asks search engines to skip it.
 # true: "Map" joins the menu and the sitemap (milestone M2).
-public: false
+public: true
 
 # Where the pipeline publishes (S07): index.json lists the last 2 h of frames per layer,
 # catalog.json everything online (48 h, D29).

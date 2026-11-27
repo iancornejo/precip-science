@@ -22,6 +22,7 @@ const products = defineCollection({
       figure_credit: z.string().optional(),
       credits: z.array(z.string()).default([]),
       links: z.array(z.object({ label: z.string().trim().min(1), url: z.url() })).default([]),
+      map: z.string().startsWith("/").optional(),           // the product's live map on this site, e.g. /map/
     }),
 });
 

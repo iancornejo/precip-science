@@ -29,6 +29,7 @@ const { Content } = await render(product);
       <h1>{d.title}</h1>
       <StageBadge stage={d.stage} class="stage-lg" />
       <p class="lead" set:html={rich(d.summary)} />
+      {d.map && d.stage === "live" && <p class="cta-row"><a class="cta" href={d.map}>Open the live map</a></p>}
     </header>
 
     {d.figures.length > 0 && (
