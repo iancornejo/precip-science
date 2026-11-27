@@ -121,13 +121,46 @@ function setSpacing(ctx: CanvasRenderingContext2D, v: string) {
 const tick = (v: number) => (Math.abs(v) >= 1 || v === 0 ? formatNumber(v, 0) : formatNumber(v, 1));
 
 // ---------------------------------------------------------------- the pieces
-function timeCard(ctx: CanvasRenderingContext2D, s: Scene): { w: number; h: number; draw: (x: number, y: number) => void } {
-  const padX = 12, padY = 9;
+// The drop mark and "precip.science", 20 px tall.
+const MARK_H = 17, MARK_W = (MARK_H * DROP_VIEWBOX.w) / DROP_VIEWBOX.h, LOGO_GAP = 7, LOGO_H = 20;
+
+function logoWidth(ctx: CanvasRenderingContext2D): number {
+  ctx.font = font(600, 15);
+  return MARK_W + LOGO_GAP + ctx.measureText("precip.science").width;
+}
+
+/** The logo with its top-left corner at (x, y). */
+function drawLogo(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const k = MARK_H / DROP_VIEWBOX.h;
+  ctx.save();
+  ctx.translate(x, y + 1);
+  ctx.scale(k, k);
+  ctx.translate(-DROP_VIEWBOX.x, -DROP_VIEWBOX.y);       // the mark, from its SVG paths
+  ctx.fillStyle = DROP_DOME.fill;
+  ctx.fill(new Path2D(DROP_DOME.d));
+  ctx.strokeStyle = DROP_WAVE.stroke;
+  ctx.lineWidth = DROP_WAVE.width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.stroke(new Path2D(DROP_WAVE.d));
+  ctx.restore();
+  ctx.textBaseline = "alphabetic";
+  ctx.font = font(600, 15);
+  ctx.fillStyle = UMBER;
+  ctx.fillText("precip.science", x + MARK_W + LOGO_GAP, y + 14);
+}
+
+/** The time; with `logo`, the logo too: beside the time if it fits, else under it. */
+function timeCard(ctx: CanvasRenderingContext2D, s: Scene, maxW: number, logo: boolean): { w: number; h: number; draw: (x: number, y: number) => void } {
+  const padX = 12, padY = 9, gap = 18;
   ctx.font = font(600, 15);
   const w1 = ctx.measureText(s.time).width;
   ctx.font = font(400, 13);
   const w2 = ctx.measureText(s.local).width;
-  const w = Math.max(w1, w2) + 2 * padX, h = 2 * padY + 36;
+  const tw = Math.max(w1, w2), lw = logo ? logoWidth(ctx) : 0;
+  const beside = logo && tw + gap + lw + 2 * padX <= maxW;
+  const w = (beside ? tw + gap + lw : Math.max(tw, lw)) + 2 * padX;
+  const h = 2 * padY + 36 + (logo && !beside ? LOGO_H + 6 : 0);
   return {
     w, h,
     draw(x, y) {
@@ -139,13 +172,18 @@ function timeCard(ctx: CanvasRenderingContext2D, s: Scene): { w: number; h: numb
       ctx.font = font(400, 13);
       ctx.fillStyle = UMBER_MUTED;
       ctx.fillText(s.local, x + padX, y + padY + 32);
+      if (logo) {
+        if (beside) drawLogo(ctx, x + w - padX - lw, y + (h - LOGO_H) / 2);
+        else drawLogo(ctx, x + padX, y + padY + 36 + 6);
+      }
     },
   };
 }
 
-function legendCard(ctx: CanvasRenderingContext2D, p: Palette, title: string, w: number): { h: number; draw: (x: number, y: number) => void } {
+function legendCard(ctx: CanvasRenderingContext2D, p: Palette, title: string, w: number, notes: string[] = []): { h: number; draw: (x: number, y: number) => void } {
   const L = p.legend;
-  const padX = 12, padY = 10, innerW = w - 2 * padX;
+  const padX = 12, padY = 10, innerW = w - 2 * padX, noteLh = 13.5;
+  const noteLines = notes.flatMap((n) => layout(ctx, [{ text: n, font: font(400, 10.5), color: UMBER_MUTED }], innerW));
   const units = L.kind !== "categorical" && L.units ? ` (${L.units})` : "";
   const head = layout(ctx, [{ text: title, font: font(600, 14), color: UMBER }, { text: units, font: font(400, 14), color: UMBER_MUTED }], innerW);
   let bodyH = 0;
@@ -163,7 +201,22 @@ function legendCard(ctx: CanvasRenderingContext2D, p: Palette, title: string, w:
   } else {
     bodyH = 12 + 17 + (L.kind === "continuous" && L.bands?.length ? 15 : 0);
   }
-  const h = padY + head.length * 19 + 4 + bodyH + 8 + 15 + padY - 2;
+  // "No radar coverage" goes on the title row when there's room (a row less), else under the scale
+  ctx.font = font(400, 12);
+  const covW = 18 + ctx.measureText("No radar coverage").width;
+  const covInHead = head.length === 1 && lineWidth(ctx, head[0]) + 16 + covW <= innerW;
+  const covH = covInHead ? 0 : 8 + 15;
+  const notesH = noteLines.length ? 8 + noteLines.length * noteLh : 0;
+  const h = padY + head.length * 19 + 4 + bodyH + covH + notesH + padY - 2;
+  const noCoverage = (x: number, top: number) => {
+    ctx.fillStyle = "rgba(46, 36, 29, 0.08)";
+    ctx.fillRect(x, top, 12, 12);
+    ctx.strokeStyle = "rgba(46, 36, 29, 0.28)";
+    ctx.strokeRect(x + 0.5, top + 0.5, 11, 11);
+    ctx.font = font(400, 12);
+    ctx.fillStyle = UMBER_MUTED;
+    ctx.fillText("No radar coverage", x + 18, top + 11);
+  };
   return {
     h,
     draw(x0, y0) {
@@ -171,6 +224,7 @@ function legendCard(ctx: CanvasRenderingContext2D, p: Palette, title: string, w:
       const x = x0 + padX;
       let y = y0 + padY + 13;
       drawLines(ctx, head, x, y, 19);
+      if (covInHead) noCoverage(x + innerW - covW, y - 11);
       y += (head.length - 1) * 19 + 10;
       if (L.kind === "categorical") {
         ctx.font = font(400, 13);
@@ -221,52 +275,37 @@ function legendCard(ctx: CanvasRenderingContext2D, p: Palette, title: string, w:
         }
         ctx.textAlign = "left";
       }
-      y += bodyH + 8;
-      ctx.fillStyle = "rgba(46, 36, 29, 0.08)";
-      ctx.fillRect(x, y, 12, 12);
-      ctx.strokeStyle = "rgba(46, 36, 29, 0.28)";
-      ctx.strokeRect(x + 0.5, y + 0.5, 11, 11);
-      ctx.font = font(400, 12);
-      ctx.fillStyle = UMBER_MUTED;
-      ctx.fillText("No radar coverage", x + 18, y + 11);
+      y += bodyH;
+      if (!covInHead) {
+        noCoverage(x, y + 8);
+        y += 8 + 12;
+      }
+      if (noteLines.length) {
+        y += 8;
+        ctx.fillStyle = RULE;
+        ctx.fillRect(x, y - 3, innerW, 1);
+        drawLines(ctx, noteLines, x, y + 11, noteLh);
+      }
     },
   };
 }
 
-/** The drop mark and "precip.science", with the notes under them, right-aligned. */
+/** The logo with the notes under it, right-aligned (wide images). */
 function brandBlock(ctx: CanvasRenderingContext2D, notes: string[], maxW: number): { w: number; h: number; draw: (x: number, y: number) => void } {
-  const padX = 10, padY = 8, markH = 17, markW = (markH * DROP_VIEWBOX.w) / DROP_VIEWBOX.h, gap = 7, lh = 13.5;
-  ctx.font = font(600, 15);
-  const wordW = ctx.measureText("precip.science").width;
+  const padX = 10, padY = 8, lh = 13.5;
+  const lw = logoWidth(ctx);
   const lines = notes.flatMap((n) => layout(ctx, [{ text: n, font: font(400, 10.5), color: UMBER_MUTED }], maxW - 2 * padX));
-  const w = Math.min(maxW, Math.max(markW + gap + wordW, ...lines.map((l) => lineWidth(ctx, l))) + 2 * padX);
-  const h = 2 * padY + 20 + (lines.length ? 4 + lines.length * lh : 0) - 2;
+  const w = Math.min(maxW, Math.max(lw, ...lines.map((l) => lineWidth(ctx, l))) + 2 * padX);
+  const h = 2 * padY + LOGO_H + (lines.length ? 4 + lines.length * lh : 0) - 2;
   return {
     w, h,
     draw(x, y) {
       card(ctx, x, y, w, h);
       const right = x + w - padX;
-      // the mark, from its SVG paths
-      const k = markH / DROP_VIEWBOX.h;
-      ctx.save();
-      ctx.translate(right - wordW - gap - markW, y + padY + 1);
-      ctx.scale(k, k);
-      ctx.translate(-DROP_VIEWBOX.x, -DROP_VIEWBOX.y);
-      ctx.fillStyle = DROP_DOME.fill;
-      ctx.fill(new Path2D(DROP_DOME.d));
-      ctx.strokeStyle = DROP_WAVE.stroke;
-      ctx.lineWidth = DROP_WAVE.width;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.stroke(new Path2D(DROP_WAVE.d));
-      ctx.restore();
-      ctx.textBaseline = "alphabetic";
-      ctx.font = font(600, 15);
-      ctx.fillStyle = UMBER;
-      ctx.fillText("precip.science", right - wordW, y + padY + 14);
+      drawLogo(ctx, right - lw, y + padY);
       lines.forEach((line, i) => {
-        const lw = lineWidth(ctx, line);
-        drawLines(ctx, [line], right - lw, y + padY + 20 + 4 + 10 + i * lh, 0);
+        const tw = lineWidth(ctx, line);
+        drawLines(ctx, [line], right - tw, y + padY + LOGO_H + 4 + 10 + i * lh, 0);
       });
     },
   };
@@ -417,18 +456,26 @@ export function drawOverlays(out: HTMLCanvasElement, mapCssW: number, s: Scene) 
 
   if (s.point) crosshair(ctx, (s.point.x * k) / u, (s.point.y * k) / u);
 
-  const time = timeCard(ctx, s);
-  time.draw(M, M);
-
   const legendW = Math.min(290, vw - 2 * M);
-  const legend = legendCard(ctx, s.palette, s.title, legendW);
-  const legendY = vh - M - legend.h;
-  legend.draw(M, legendY);
-
-  // the logo in the bottom-right corner: beside the color bar, or above it on a narrow image
   const brand = brandBlock(ctx, s.notes, Math.min(380, vw - 2 * M));
-  const beside = M + legendW + 12 + brand.w + M <= vw;
-  brand.draw(vw - M - brand.w, beside ? vh - M - brand.h : legendY - 8 - brand.h);
+  let time: ReturnType<typeof timeCard>;
+  if (M + legendW + 12 + brand.w + M <= vw) {
+    // wide: time top left, color bar bottom left, logo and notes bottom right
+    time = timeCard(ctx, s, vw - 2 * M, false);
+    time.draw(M, M);
+    const legend = legendCard(ctx, s.palette, s.title, legendW);
+    legend.draw(M, vh - M - legend.h);
+    brand.draw(vw - M - brand.w, vh - M - brand.h);
+  } else {
+    // narrow (phones): the logo joins the time card and the notes the color bar's card, so the
+    // map gets the height between them (Ian, Nov 27); the card widens to keep each note on a line
+    time = timeCard(ctx, s, vw - 2 * M, true);
+    time.draw(M, M);
+    ctx.font = font(400, 10.5);
+    const notesW = Math.max(0, ...s.notes.map((n) => ctx.measureText(n).width));
+    const legend = legendCard(ctx, s.palette, s.title, Math.min(vw - 2 * M, Math.max(legendW, notesW + 24)), s.notes);
+    legend.draw(M, vh - M - legend.h);
+  }
 
   if (s.point) {
     const pw = Math.min(290, vw - 2 * M);

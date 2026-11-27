@@ -80,6 +80,9 @@ fade, each frame fully loaded first, while the rest of the page is held still (`
   bar bottom left, the drop mark and "precip.science" bottom right with the lines a copy must
   carry (unofficial, not a forecast, NOAA MRMS not endorsed by NOAA, © OpenStreetMap), and,
   if asked, the pinned point's values and history (top right, or under the time when narrow).
+  On narrow images (phones), where the logo card won't fit beside the color bar, the logo
+  joins the time card and those lines go to the foot of the color bar's card, which also puts
+  "No radar coverage" on its title row when there's room: two cards, the most map between.
 - `video.ts`: [Mediabunny](https://mediabunny.dev) (MPL-2.0) on WebCodecs, H.264 in MP4 where
   the browser can make it, else VP9 or VP8 in WebM; a steady 10 frames a second. `gif.ts`:
   gifenc (MIT). Both load only when a loop is saved; without WebCodecs the loop becomes a GIF.
