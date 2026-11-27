@@ -91,6 +91,23 @@
     - label: lrose-core on GitHub
       url: https://github.com/NCAR/lrose-core
 
+- id: intensity-duration
+  kind: Method
+  name: Rainfall intensity and duration
+  text: >-
+    Heavy rain comes from rain that is intense, long-lasting or both (Doswell et al. 1996).
+    Cornejo et al. (2024) turned that into a method for every grid point: rain periods built from
+    hourly totals, each placed on a color grid by its duration and average rain rate.
+  refs:
+    - text: >-
+        Cornejo, I. C., A. K. Rowe, K. L. Rasmussen, and J. C. DeHart, 2024: Orographic controls on
+        extreme precipitation associated with a mei-yu front. Mon. Wea. Rev., 152, 531–551.
+      doi: 10.1175/MWR-D-23-0170.1
+    - text: >-
+        Doswell, C. A., III, H. E. Brooks, and R. A. Maddox, 1996: Flash flood forecasting: An
+        ingredients-based methodology. Wea. Forecasting, 11, 560–581.
+      doi: 10.1175/1520-0434(1996)011<0560:FFFAIB>2.0.CO;2
+
 - id: fingerprints
   kind: Method
   name: Polarimetric fingerprints of precipitation processes

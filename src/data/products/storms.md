@@ -1,7 +1,7 @@
 ---
 # Product page: /products/storms/ (see ecconus.md for how these files work)
 title: Storm objects
-order: 2
+order: 3
 stage: planned
 icon: storms
 summary: >-

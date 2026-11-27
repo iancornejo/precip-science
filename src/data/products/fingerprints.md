@@ -1,7 +1,7 @@
 ---
 # Product page: /products/fingerprints/ (see ecconus.md for how these files work)
 title: Microphysical fingerprints
-order: 3
+order: 4
 stage: exploratory
 icon: fingerprints
 summary: >-

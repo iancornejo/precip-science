@@ -3,6 +3,14 @@
 interface Props { name: string; size?: number }
 const { name, size = 28 } = Astro.props;
 const ink = "#2E241D";
+// Intensity and duration: the color grid of Cornejo et al. (2024, Fig. 6a), sampled from the figure.
+// Columns: duration, shortest to longest; rows: average rain rate, highest at the top.
+const MATRIX = [
+  ["#0A6DB0", "#DD5B05", "#31BA22", "#9D005B"],
+  ["#2C8AC0", "#EB9447", "#83C758", "#C44384"],
+  ["#8BADDA", "#F4C58F", "#B3DA97", "#D98FB4"],
+  ["#CCDDF1", "#FBEBD1", "#E0F3D5", "#EDD1E0"],
+];
 ---
 <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true" focusable="false">
   {name === "ecconus" && <>
@@ -29,7 +37,11 @@ const ink = "#2E241D";
     <line x1="5" y1="20" x2="23" y2="20" stroke={ink} stroke-width="1" />
     <circle cx="20" cy="11" r="3" fill="#3F7F62" />
   </>}
-  {!["ecconus", "storms", "fingerprints", "eccoworld"].includes(name) && <>
+  {name === "intensity-duration" && <>
+    {MATRIX.map((row, r) => row.map((fill, c) => <rect x={c * 7} y={r * 7} width="7" height="7" fill={fill} />))}
+    <rect x="0.5" y="0.5" width="27" height="27" fill="none" stroke={ink} stroke-width="1" />
+  </>}
+  {!["ecconus", "storms", "fingerprints", "eccoworld", "intensity-duration"].includes(name) && <>
     <circle cx="14" cy="14" r="9" fill="none" stroke={ink} stroke-width="1" />
     <circle cx="14" cy="14" r="4" fill="#2F4B9A" />
   </>}

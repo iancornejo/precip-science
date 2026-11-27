@@ -14,7 +14,7 @@ const products = defineCollection({
       order: z.number().int(),
       stage: z.enum(stageIds),
       summary: z.string().trim().min(1),
-      icon: z.enum(["ecconus", "storms", "fingerprints", "eccoworld", "generic"]).default("generic"),
+      icon: z.enum(["ecconus", "storms", "fingerprints", "eccoworld", "intensity-duration", "generic"]).default("generic"),
       facts: z.array(z.object({ label: z.string().trim().min(1), value: z.string().trim().min(1) })).default([]),
       figures: z
         .array(z.object({ src: image(), alt: z.string().trim().min(1), caption: z.string().optional() }))

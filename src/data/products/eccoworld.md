@@ -1,7 +1,7 @@
 ---
 # Product page: /products/eccoworld/ (see ecconus.md for how these files work)
 title: EccoWorld
-order: 4
+order: 5
 stage: feasibility-study
 icon: eccoworld
 summary: >-
