@@ -13,6 +13,17 @@ export function utcDay(t: number): string {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
+/** "Nov 25, 2026, 17:50 UTC": saved images are read later and elsewhere, so always the full date. */
+export function utcStamp(t: number): string {
+  const d = new Date(t);
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${utcClock(t)} UTC`;
+}
+
+/** "20261125T1750Z", for file names. */
+export function fileStamp(t: number): string {
+  return new Date(t).toISOString().slice(0, 16).replace(/[-:]/g, "") + "Z";
+}
+
 const localFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 export function localClock(t: number): string {
   return localFmt.format(new Date(t));

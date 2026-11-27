@@ -69,6 +69,23 @@ zoom 6 it holds every OpenStreetMap pond. Up close the lake shores are therefore
 generalized beside the water fill. A sharper set would need its own file, for example the big
 lakes cut from the zoom-9 extract on the server.
 
+## Saving images and loops
+
+**Save** in the time bar makes a PNG of the frame on screen, or the loop as a video or a GIF, at
+the current view, all in the reader's browser. The map's own canvas is read inside MapLibre's
+`render` event (no `preserveDrawingBuffer`), and the loop is stepped frame by frame with no
+fade, each frame fully loaded first, while the rest of the page is held still (`inert`).
+
+- `src/scripts/map/save.ts` lays out the corners (Ian, Nov 27): the time top left, the color
+  bar bottom left, the drop mark and "precip.science" bottom right with the lines a copy must
+  carry (unofficial, not a forecast, NOAA MRMS not endorsed by NOAA, © OpenStreetMap), and,
+  if asked, the pinned point's values and history (top right, or under the time when narrow).
+- `video.ts`: [Mediabunny](https://mediabunny.dev) (MPL-2.0) on WebCodecs, H.264 in MP4 where
+  the browser can make it, else VP9 or VP8 in WebM; a steady 10 frames a second. `gif.ts`:
+  gifenc (MIT). Both load only when a loop is saved; without WebCodecs the loop becomes a GIF.
+- Sizes on the long side: PNG up to 2560 px, video 1920, GIF 960. Overlays scale with the
+  output but never below their size on screen.
+
 ## Testing locally
 
 `astro dev` (or `astro build && astro preview`), then open

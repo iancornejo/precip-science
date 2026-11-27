@@ -134,7 +134,9 @@ fieldset:disabled .map-choice { cursor: default; }
 .map-seg input:focus-visible + span { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .map-row-opts .map-btn { height: 32px; }
 .map-loading { font-size: 0.8125rem; color: var(--color-text-muted); }
-.map-about-btn { margin-left: auto; gap: 0; }
+.map-save-btn { margin-left: auto; }
+.map-about-btn { gap: 0; }
+.map-linkbtn { padding: 0; border: 0; background: none; color: var(--color-link); font: inherit; text-decoration: underline; cursor: pointer; }
 .map-notice { margin-top: 8px; font-size: 0.75rem; line-height: 1.4; color: var(--color-text-muted); }
 .map-notice strong { color: var(--color-text); font-weight: var(--weight-semibold); }
 .map-notice a, .map-about a { color: var(--color-link); }
@@ -206,6 +208,8 @@ kbd {
   .map-timebar { max-width: none; width: 100%; padding: 8px 10px 6px; }
   .map-btn { min-width: 44px; height: 44px; }
   .map-row-opts .map-btn, .map-seg span { height: 36px; }
+  .map-row-opts { gap: 6px; }
+  .map-row-opts .map-about-btn { display: none; }   /* phones: About is a link in the notice, so the row fits on one line */
   .map-slider { margin: 6px 0 4px; }
   .map-local { display: none; }
   .map-local-2 { display: inline; }
@@ -231,7 +235,18 @@ kbd {
 .map-ticks-bins span:first-child, .map-ticks-bins span:last-child { transform: translateX(-50%); }
 .map-ticks-bins span:first-child { transform: none; }
 
-.map-goto[hidden] { display: none; }
+.map-goto[hidden], .map-save[hidden], .map-save [hidden] { display: none; }
+.map-save { display: grid; gap: 8px; padding-bottom: 10px; margin-bottom: 10px; border-bottom: var(--rule); font-size: 0.875rem; }
+.map-save-head { font-weight: var(--weight-semibold); }
+.map-save-head .muted { font-weight: var(--weight-regular); }
+.map-save-row { flex-wrap: wrap; gap: 6px 10px; }
+.map-save .map-btn { height: 34px; }
+.map-save .map-choice { min-height: 26px; white-space: normal; }
+.map-save .map-choice:has(input:disabled) { cursor: default; color: var(--color-text-muted); }
+.map-save-info, .map-save-status, .map-save-file { color: var(--color-text-muted); font-size: 0.8125rem; }
+.map-save-file { overflow-wrap: anywhere; }
+a.map-btn { text-decoration: none; }
+.mapapp[data-saving="true"] .mapapp-map { cursor: progress; }
 .map-goto { display: grid; gap: 6px; padding-bottom: 10px; margin-bottom: 10px; border-bottom: var(--rule); font-size: 0.875rem; }
 .map-goto input {
   height: 36px; padding: 0 8px; border: 1px solid var(--color-rule-strong); background: var(--paper-light);

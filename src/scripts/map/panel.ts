@@ -18,13 +18,42 @@ export interface PanelContext {
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-function latlon(lon: number, lat: number): string {
+export function latlon(lon: number, lat: number): string {
   const ns = lat >= 0 ? "N" : "S";
   const ew = lon >= 0 ? "E" : "W";
   return `${Math.abs(lat).toFixed(2)}° ${ns}, ${Math.abs(lon).toFixed(2)}° ${ew}`;
 }
 
-type Series = { t: number; v: number | null }[];
+export type Series = { t: number; v: number | null }[];
+
+/** One layer's value at a point, for the panel and for saved images. */
+export interface PointRow {
+  layer: LayerId;
+  text: string;
+  muted: boolean;               // "No frame", "Not loaded"
+  swatch: string | null;        // a class color (echo type, precip type)
+  note: string | null;          // convectivity's class
+  at: number | null;            // the frame's time, when it isn't the time on screen
+}
+
+/** What every layer says at (lon, lat) at the time on screen (the nearest frame within 5 min). */
+export function readPoint(ctx: PanelContext, lon: number, lat: number): Promise<PointRow[]> {
+  return Promise.all(LAYER_ORDER.map(async (layer): Promise<PointRow> => {
+    const blank = { layer, muted: true, swatch: null, note: null, at: null };
+    const f = ctx.store.nearest(layer, ctx.t, 5);
+    if (!f) return { ...blank, text: "No frame" };
+    let code: number;
+    try { code = await codeAt(f.url, lon, lat); } catch { return { ...blank, text: "Not loaded" }; }
+    const r = describe(layer, code);
+    const classed = (layer === "echo_type" || layer === "precip_flag") && code !== 0 && code !== NO_COVERAGE && code !== MISSING;
+    return {
+      layer, text: r.text, muted: false,
+      swatch: classed ? cssColor(ctx.palette(layer), code) : null,
+      note: layer === "convectivity" && r.value !== null ? convectivityClass(r.value) : null,
+      at: Math.abs(f.t - ctx.t) >= 90e3 ? f.t : null,
+    };
+  }));
+}
 
 function sparkline(series: Series, kind: "convectivity" | "rate", tNow: number, t0: number, t1: number, pal: Palette, label: string): string {
   const W = 260, H = 56, P = 2;
@@ -76,6 +105,15 @@ export class PointPanel {
 
   get visible() { return !this.el.hidden; }
 
+  /** The pinned point's history over the loop, once loaded. */
+  get history(): { conv: Series; rate: Series; t0: number; t1: number } | null {
+    if (!this.pinned || !this.seriesData) return null;
+    const { conv, rate } = this.seriesData;
+    const all = [...conv, ...rate];
+    if (!all.length) return null;
+    return { conv, rate, t0: Math.min(...all.map((p) => p.t)), t1: Math.max(...all.map((p) => p.t)) };
+  }
+
   hide() {
     this.pinned = false;
     this.token++;
@@ -87,19 +125,12 @@ export class PointPanel {
   async show(ctx: PanelContext, lon: number, lat: number, pinned: boolean) {
     const token = ++this.token;
     this.lon = lon; this.lat = lat; this.pinned = pinned;
-    const rows = await Promise.all(LAYER_ORDER.map(async (layer) => {
-      const f = ctx.store.nearest(layer, ctx.t, 5);
-      if (!f) return { layer, html: `<span class="muted">No frame</span>`, at: null as number | null };
-      let code: number;
-      try { code = await codeAt(f.url, lon, lat); } catch { return { layer, html: `<span class="muted">Not loaded</span>`, at: null }; }
-      const r = describe(layer, code);
-      let html = esc(r.text);
-      if ((layer === "echo_type" || layer === "precip_flag") && code !== 0 && code !== NO_COVERAGE && code !== MISSING) {
-        html = `<span class="swatch" style="background:${cssColor(ctx.palette(layer), code)}"></span>${html}`;
-      }
-      if (layer === "convectivity" && r.value !== null) html += ` <span class="muted">${convectivityClass(r.value)}</span>`;
-      return { layer, html, at: Math.abs(f.t - ctx.t) >= 90e3 ? f.t : null };
-    }));
+    const rows = (await readPoint(ctx, lon, lat)).map((r) => {
+      let html = r.muted ? `<span class="muted">${esc(r.text)}</span>` : esc(r.text);
+      if (r.swatch) html = `<span class="swatch" style="background:${r.swatch}"></span>${html}`;
+      if (r.note) html += ` <span class="muted">${r.note}</span>`;
+      return { layer: r.layer, html, at: r.at };
+    });
     if (token !== this.token) return;
     const key = `${lon.toFixed(4)},${lat.toFixed(4)},${ctx.windowLabel},${ctx.loop("convectivity").length}`;
     const keepSeries = pinned && key === this.seriesKey && this.seriesData;

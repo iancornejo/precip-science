@@ -63,6 +63,31 @@ const icon = {
     <div class="map-bottom">
       <div id="map-legend" class="map-card map-legend" aria-label="Legend"></div>
       <div class="map-card map-timebar">
+        <form id="map-save" class="map-save" hidden aria-labelledby="map-save-h">
+          <p id="map-save-h" class="map-save-head">Save the map as it looks now <span class="muted">(this view, with the time, color bar and logo)</span></p>
+          <div class="map-row map-save-row">
+            <div class="map-seg" role="radiogroup" aria-label="What to save">
+              <label><input type="radio" name="kind" value="image" checked /><span>This frame</span></label>
+              <label><input type="radio" name="kind" value="loop" /><span>The loop</span></label>
+            </div>
+            <div id="map-save-format" class="map-seg" role="radiogroup" aria-label="Loop format" hidden>
+              <label><input type="radio" name="format" value="video" checked /><span>Video</span></label>
+              <label><input type="radio" name="format" value="gif" /><span>GIF</span></label>
+            </div>
+          </div>
+          <label class="map-choice map-save-point"><input id="map-save-point" type="checkbox" /><span>Add the pinned point’s values<span id="map-save-pinhint" class="muted"> (pin one on the map first)</span></span></label>
+          <p id="map-save-info" class="map-save-info"></p>
+          <div class="map-row map-save-row">
+            <button id="map-save-go" type="submit" class="map-btn map-btn-primary map-btn-text">Make PNG</button>
+            <button id="map-save-close" type="button" class="map-btn map-btn-text">Close</button>
+            <span id="map-save-status" class="map-save-status" role="status"></span>
+          </div>
+          <div id="map-save-result" class="map-row map-save-row" hidden>
+            <a id="map-save-download" class="map-btn map-btn-text" href="#" download>Download</a>
+            <button id="map-save-share" type="button" class="map-btn map-btn-text" hidden>Share</button>
+            <span id="map-save-file" class="map-save-file"></span>
+          </div>
+        </form>
         <form id="map-goto" class="map-goto" hidden>
           <label for="map-goto-time">Show the 2-hour loop ending at <span class="muted">(your local time; any time in the last 48 h)</span></label>
           <div class="map-row">
@@ -103,11 +128,12 @@ const icon = {
             </select>
           </label>
           <span id="map-loading" class="map-loading" role="status" hidden></span>
+          <button id="map-save-open" type="button" class="map-btn map-btn-text map-save-btn" aria-expanded="false" aria-controls="map-save">Save</button>
           <button id="map-about-open" type="button" class="map-btn map-btn-text map-about-btn">About<span class="map-wide">&nbsp;this map</span></button>
         </div>
         </div>
         <div class="map-foot">
-          <p class="map-notice"><strong>Experimental and unofficial.</strong><span class="map-notice-more"> Not a forecast or warning: see <a href="https://www.weather.gov">weather.gov</a>.</span></p>
+          <p class="map-notice"><strong>Experimental and unofficial.</strong><span class="map-notice-more"> Not a forecast or warning: see <a href="https://www.weather.gov">weather.gov</a>.</span><span class="map-narrow"> <button id="map-about-link" type="button" class="map-linkbtn">About this map</button></span></p>
           <p id="map-credits" class="map-credits"></p>
         </div>
         <p id="map-summary" class="map-summary" aria-live="polite"></p>
@@ -142,18 +168,19 @@ const icon = {
         <li>Some layers offer two color sets; the switch beside the legend title swaps them, and this browser remembers the choice.</li>
         <li>Coastlines and the shores of the big lakes are the slate lines over the radar; state and country borders are the brown ones.</li>
         <li><strong>Labels</strong> shows or hides the basemap’s names (this browser remembers), and <strong>Terrain</strong> adds shaded relief under the radar.</li>
+        <li><strong>Save</strong> makes a PNG of the frame on screen, or a video or GIF of the loop, at the view you’re looking at, with the time, the color bar and the precip.science logo (and, if you like, a pinned point’s values). It’s all made in your browser; nothing is uploaded.</li>
       </ul>
 
       <h3>Keyboard</h3>
       <ul class="map-keys">
         <li><kbd>Space</kbd> or <kbd>K</kbd> play or pause</li>
         <li><kbd>,</kbd> and <kbd>.</kbd> (or <kbd>J</kbd> and <kbd>L</kbd>) step back and forward</li>
-        <li><kbd>N</kbd> newest frame · <kbd>T</kbd> pick a time · <kbd>1</kbd>–<kbd>5</kbd> layers · <kbd>Esc</kbd> close the point panel · <kbd>?</kbd> this help</li>
+        <li><kbd>N</kbd> newest frame · <kbd>T</kbd> pick a time · <kbd>S</kbd> save · <kbd>1</kbd>–<kbd>5</kbd> layers · <kbd>Esc</kbd> close the point panel · <kbd>?</kbd> this help</li>
         <li>With the map focused, arrow keys move it and <kbd>+</kbd> and <kbd>−</kbd> zoom.</li>
       </ul>
 
       <h3>Data and credits</h3>
-      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) if that can’t load. Shaded relief, when on, comes from the Terrain Tiles open dataset on AWS (Mapzen; SRTM, GMTED2010, ETOPO1, USGS 3DEP and others). The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License).</p>
+      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) if that can’t load. Shaded relief, when on, comes from the Terrain Tiles open dataset on AWS (Mapzen; SRTM, GMTED2010, ETOPO1, USGS 3DEP and others). The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License). Saved videos are made with <a href="https://github.com/Vanilagy/mediabunny">Mediabunny</a> (Mozilla Public License 2.0) and GIFs with <a href="https://github.com/mattdesl/gifenc">gifenc</a> (MIT).</p>
     </div>
     <Credits ids={["mrms", "ecco", "eccopy"]} />
   </dialog>

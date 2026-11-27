@@ -17,10 +17,11 @@ import { FrameStore, type Frame } from "./frames";
 import { LAYERS, LAYER_ORDER, NO_COVERAGE, type LayerId } from "./layers";
 import { legendHtml } from "./legend";
 import { onePixel, recolor } from "./png";
-import { PointPanel, type PanelContext } from "./panel";
+import { latlon, PointPanel, readPoint, type PanelContext } from "./panel";
 import { histogram, type ViewBox } from "./sample";
+import { drawOverlays, gifWriter, loadFonts, outputSize, videoWriter, type LoopWriter, type PointInfo, type Scene } from "./save";
 import { summarize } from "./summary";
-import { ago, stamp } from "./timefmt";
+import { ago, fileStamp, localClock, stamp, utcStamp } from "./timefmt";
 
 interface Config {
   index: string;
@@ -198,6 +199,19 @@ const ui = {
   gotoUtc: $<HTMLElement>("#map-goto-utc"),
   terrain: $<HTMLInputElement>("#map-terrain"),
   labels: $<HTMLInputElement>("#map-labels"),
+  saveOpen: $<HTMLButtonElement>("#map-save-open"),
+  saveForm: $<HTMLFormElement>("#map-save"),
+  savePoint: $<HTMLInputElement>("#map-save-point"),
+  savePinHint: $<HTMLElement>("#map-save-pinhint"),
+  saveFormat: $<HTMLElement>("#map-save-format"),
+  saveInfo: $<HTMLElement>("#map-save-info"),
+  saveGo: $<HTMLButtonElement>("#map-save-go"),
+  saveClose: $<HTMLButtonElement>("#map-save-close"),
+  saveStatus: $<HTMLElement>("#map-save-status"),
+  saveResult: $<HTMLElement>("#map-save-result"),
+  saveDownload: $<HTMLAnchorElement>("#map-save-download"),
+  saveShare: $<HTMLButtonElement>("#map-save-share"),
+  saveFile: $<HTMLElement>("#map-save-file"),
   slider: $<HTMLInputElement>("#map-slider"),
   time: $<HTMLElement>("#map-time"),
   age: $<HTMLElement>("#map-age"),
@@ -236,12 +250,14 @@ function pin(lon: number, lat: number) {
   pinMarker.setLngLat([lon, lat]).addTo(map);
   panel.show(panelContext(), lon, lat, true);
   settlePin();
+  if (!ui.saveForm.hidden && !saving) updateSaveForm();
 }
 
 function unpin() {
   pinned = null;
   pinMarker?.remove();
   panel.hide();
+  if (!ui.saveForm.hidden && !saving) updateSaveForm();
 }
 
 /**
@@ -619,6 +635,7 @@ async function setLayer(layer: LayerId) {
   const t = current()?.t;
   state.layer = layer;
   rebuildLoop(state.follow || t === undefined ? "latest" : t);
+  if (!ui.saveForm.hidden && !saving) updateSaveForm();
   writeHash();
   renderLegend();
   (ui.layers.elements.namedItem("layer") as RadioNodeList).value = layer;
@@ -665,12 +682,22 @@ function setBarCollapsed(collapsed: boolean, save = true) {
     ui.gotoForm.hidden = true;
     ui.gotoOpen.setAttribute("aria-expanded", "false");
   }
+  if (collapsed && !ui.saveForm.hidden && !saving) {
+    ui.saveForm.hidden = true;
+    ui.saveOpen.setAttribute("aria-expanded", "false");
+    clearSaveResult();
+  }
   if (save) try { localStorage.setItem(BAR_KEY, collapsed ? "collapsed" : "open"); } catch { /* private mode */ }
 }
 
 async function openGoto() {
   if (barCollapsed()) setBarCollapsed(false);
   const open = ui.gotoForm.hidden;
+  if (open && !ui.saveForm.hidden) {
+    ui.saveForm.hidden = true;
+    ui.saveOpen.setAttribute("aria-expanded", "false");
+    clearSaveResult();
+  }
   ui.gotoForm.hidden = !open;
   ui.gotoOpen.setAttribute("aria-expanded", String(open));
   if (!open) return;
@@ -718,13 +745,240 @@ async function setWindow(i: number) {
   if (wasPlaying) pause();
   if (win().hours > 2.01) await ensureCatalog();
   rebuildLoop(state.follow || t === undefined ? "latest" : t);
+  if (!ui.saveForm.hidden && !saving) updateSaveForm();
   await showIdx(state.idx);
   if (pinned) refreshPanel();
   if (wasPlaying) play();
 }
 
+// ---------------------------------------------------------------- saving: an image of the frame, or the loop
+// The map's canvas, as drawn, goes into an output canvas; save.ts adds the time, the color bar,
+// the logo and its notes. A loop is stepped frame by frame with no fade, each frame fully loaded
+// before it's taken, while the rest of the page is held still. All of it runs in this browser.
+const PNG_CAP = 2560, VIDEO_CAP = 1920, GIF_CAP = 960;     // px on the long side
+const desktopPointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+let saving = false;
+let saveStop = false;
+let saveUrl: string | null = null;
+let saveBlobFile: File | null = null;
+class Stopped extends Error {}
+
+const saveKind = () => (ui.saveForm.elements.namedItem("kind") as RadioNodeList).value as "image" | "loop";
+const saveFmt = () => (ui.saveForm.elements.namedItem("format") as RadioNodeList).value as "video" | "gif";
+const setSaveStatus = (s: string) => { ui.saveStatus.textContent = s; };
+
+function updateSaveForm() {
+  const loop = saveKind() === "loop";
+  ui.saveFormat.hidden = !loop;
+  ui.savePoint.disabled = saving || !pinned;
+  if (!pinned) ui.savePoint.checked = false;
+  ui.savePinHint.hidden = !!pinned;
+  const c = map.getCanvas();
+  const o = outputSize(c.width, c.height, !loop ? PNG_CAP : saveFmt() === "gif" ? GIF_CAP : VIDEO_CAP);
+  const speed = ui.speed.selectedOptions[0]?.textContent ?? "1×";
+  ui.saveInfo.textContent = loop
+    ? `${state.loop.length} frames (the ${windowLabel()} loop) at ${speed} speed, ${o.w} × ${o.h} px.`
+    : `PNG, ${o.w} × ${o.h} px.`;
+  ui.saveGo.textContent = !loop ? "Make PNG" : saveFmt() === "gif" ? "Make GIF" : "Make video";
+}
+
+function clearSaveResult() {
+  if (saveUrl) URL.revokeObjectURL(saveUrl);
+  saveUrl = null;
+  saveBlobFile = null;
+  ui.saveResult.hidden = true;
+}
+
+function openSave() {
+  if (saving) return;
+  if (barCollapsed()) setBarCollapsed(false);
+  const open = ui.saveForm.hidden;
+  if (open && !ui.gotoForm.hidden) {
+    ui.gotoForm.hidden = true;
+    ui.gotoOpen.setAttribute("aria-expanded", "false");
+  }
+  ui.saveForm.hidden = !open;
+  ui.saveOpen.setAttribute("aria-expanded", String(open));
+  if (open) {
+    setSaveStatus("");
+    updateSaveForm();
+    ui.saveGo.focus();
+  } else clearSaveResult();
+}
+
+/** Hold the page still while a file is made: everything but the save form ignores input. */
+function lockUi(on: boolean) {
+  saving = on;
+  app.dataset.saving = String(on);
+  for (const el of document.querySelectorAll<HTMLElement>(".map-top, #map-legend, #map-panel, #map, .map-timebar > .map-row, #map-bar-more, #map-goto")) {
+    el.inert = on;
+  }
+  for (const el of ui.saveForm.querySelectorAll<HTMLInputElement>("input[type=radio]")) el.disabled = on;
+  ui.savePoint.disabled = on || !pinned;
+  ui.saveGo.disabled = on;
+  ui.saveClose.textContent = on ? "Stop" : "Close";
+}
+
+/** Settle until every tile on screen has loaded (or 20 s pass). */
+async function settle(maxMs = 20000) {
+  const t0 = performance.now();
+  while (!map.loaded() && performance.now() - t0 < maxMs) await whenIdle();
+}
+
+/** A hidden tab draws nothing, so wait to be seen again. */
+function whenVisible(): Promise<void> {
+  if (!document.hidden) return Promise.resolve();
+  return new Promise((resolve) => {
+    const on = () => { if (!document.hidden) { document.removeEventListener("visibilitychange", on); resolve(); } };
+    document.addEventListener("visibilitychange", on);
+  });
+}
+
+/** Copy the map's next drawn frame into `out` (scaled). Read inside the render event, while WebGL still holds it. */
+function grabInto(out: HTMLCanvasElement, check: boolean): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const draw = () => {
+      clearTimeout(timer);
+      map.off("render", draw);
+      const ctx = out.getContext("2d")!;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(map.getCanvas(), 0, 0, out.width, out.height);
+      // the basemap is opaque, so a clear pixel means the browser didn't hand the image over
+      if (check && ctx.getImageData(out.width >> 1, out.height >> 1, 1, 1).data[3] === 0) reject(new Error("the browser returned a blank map"));
+      else resolve();
+    };
+    const timer = setTimeout(() => { map.off("render", draw); reject(new Error("the map didn't redraw")); }, 8000);
+    map.on("render", draw);
+    map.triggerRepaint();
+  });
+}
+
+const nbsp = (s: string) => s.replace(/ /g, "\u00a0");
+
+function exportScene(t: number, point: PointInfo | null): Scene {
+  const basemapNote = base.kind === "protomaps" ? "Map © OpenStreetMap" : "Map: Natural Earth";
+  return {
+    title: LAYERS[state.layer].title,
+    time: utcStamp(t),
+    local: localClock(t),
+    t,
+    palette: pal(state.layer),
+    // lines break only between phrases (the spaces inside each phrase don't break)
+    notes: [
+      ["Experimental and unofficial.", "Not a forecast or warning."].map(nbsp).join(" "),
+      ["Radar: NOAA MRMS, not endorsed by NOAA", basemapNote, ...(state.terrain ? ["Terrain: Mapzen"] : [])].map(nbsp).join(" · "),
+    ],
+    point,
+  };
+}
+
+async function exportPoint(t: number): Promise<PointInfo | null> {
+  if (!pinned) return null;
+  const rows = await readPoint({ ...panelContext(), t }, pinned.lon, pinned.lat);
+  const at = map.project([pinned.lon, pinned.lat]);
+  const h = panel.history;
+  return {
+    x: at.x, y: at.y,
+    where: latlon(pinned.lon, pinned.lat),
+    rows: rows.map((r) => ({ label: LAYERS[r.layer].label, text: r.text, muted: r.muted, swatch: r.swatch, note: r.note, at: r.at })),
+    history: h ? { ...h, windowLabel: windowLabel(), convPal: pal("convectivity") } : null,
+  };
+}
+
+const formatBytes = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
+
+function showSaveResult(blob: Blob, name: string) {
+  clearSaveResult();
+  saveUrl = URL.createObjectURL(blob);
+  saveBlobFile = new File([blob], name, { type: blob.type });
+  ui.saveDownload.href = saveUrl;
+  ui.saveDownload.download = name;
+  ui.saveFile.textContent = `${name} · ${formatBytes(blob.size)}`;
+  ui.saveShare.hidden = !(navigator.canShare?.({ files: [saveBlobFile] }));
+  ui.saveResult.hidden = false;
+  setSaveStatus("");
+  if (desktopPointer) ui.saveDownload.click();      // desktop: straight to Downloads; the link stays for another copy
+}
+
+async function runSave(e: Event) {
+  e.preventDefault();
+  if (saving || !current()) return;
+  const kind = saveKind();
+  let fmt = saveFmt();
+  const withPoint = ui.savePoint.checked && !!pinned;
+  clearSaveResult();
+  const wasPlaying = state.playing;
+  if (wasPlaying) pause();
+  const before = { idx: state.idx, follow: state.follow };
+  const frames = kind === "image" ? [current()!] : state.loop.slice();
+  saveStop = false;
+  lockUi(true);
+  let writer: LoopWriter | null = null;
+  try {
+    setSaveStatus("Getting ready…");
+    await loadFonts();
+    const src = map.getCanvas();
+    const cssW = map.getContainer().clientWidth;
+    const make = (cap: number) => {
+      const o = outputSize(src.width, src.height, cap);
+      const c = document.createElement("canvas");
+      c.width = o.w; c.height = o.h;
+      c.getContext("2d", { willReadFrequently: kind === "loop" && fmt === "gif" });   // the first call sets this
+      return c;
+    };
+    let out = make(kind === "image" ? PNG_CAP : fmt === "gif" ? GIF_CAP : VIDEO_CAP);
+    if (kind === "loop") {
+      if (fmt === "video") writer = await videoWriter(out);
+      if (!writer) {
+        if (fmt === "video") setSaveStatus("This browser can't make video, so a GIF instead…");
+        fmt = "gif";
+        out = make(GIF_CAP);
+        writer = await gifWriter(out);
+      }
+    }
+    for (let i = 0; i < frames.length; i++) {
+      if (saveStop) throw new Stopped();
+      const f = frames[i];
+      if (kind === "loop") {
+        state.idx = i;
+        updateTimeUi();
+        setSaveStatus(`Frame ${i + 1} of ${frames.length}…`);
+      }
+      await display(f, state.layer, 0);
+      await settle();
+      await whenVisible();
+      await grabInto(out, i === 0);
+      drawOverlays(out, cssW, exportScene(f.t, withPoint ? await exportPoint(f.t) : null));
+      if (writer) await writer.add(SPEEDS[state.speed] * (i === frames.length - 1 ? 3 : 1));
+    }
+    if (saveStop) throw new Stopped();
+    setSaveStatus("Finishing…");
+    const blob = writer
+      ? await writer.finish()
+      : await new Promise<Blob>((res, rej) => out.toBlob((b) => (b ? res(b) : rej(new Error("the PNG couldn't be made"))), "image/png"));
+    const slug = state.layer.replace(/_/g, "-");
+    const when = frames.length > 1 ? `${fileStamp(frames[0].t)}_to_${fileStamp(frames[frames.length - 1].t)}` : fileStamp(frames[0].t);
+    showSaveResult(blob, `precip-science_${slug}_${when}.${writer ? writer.ext : "png"}`);
+  } catch (err) {
+    await writer?.cancel();
+    setSaveStatus(err instanceof Stopped ? "Stopped." : `Couldn't save: ${(err as Error).message}.`);
+    if (!(err instanceof Stopped)) console.warn(err);
+  } finally {
+    if (kind === "loop") {
+      state.idx = Math.min(before.idx, state.loop.length - 1);
+      state.follow = before.follow;
+      updateTimeUi();
+      await display(current()!, state.layer, 0);
+    }
+    lockUi(false);
+    updateSaveForm();
+    if (wasPlaying) play();
+  }
+}
+
 // ---------------------------------------------------------------- refresh from the pipeline
 async function refreshIndex() {
+  if (saving) return;                       // the loop holds still while it's saved
   const before = store.latest(state.layer)?.t;
   try {
     await store.refresh();
@@ -793,6 +1047,21 @@ async function start() {
   });
   ui.labels.checked = state.labels;
   ui.labels.addEventListener("change", () => setLabels(ui.labels.checked));
+  ui.saveOpen.addEventListener("click", () => openSave());
+  ui.saveForm.addEventListener("submit", runSave);
+  ui.saveForm.addEventListener("change", (e) => { if ((e.target as HTMLInputElement).type === "radio") updateSaveForm(); });
+  ui.saveClose.addEventListener("click", () => {
+    if (saving) { saveStop = true; setSaveStatus("Stopping…"); }
+    else openSave();
+  });
+  ui.saveShare.addEventListener("click", async () => {
+    if (!saveBlobFile) return;
+    try { await navigator.share({ files: [saveBlobFile], title: "precip.science" }); } catch { /* cancelled */ }
+  });
+  // keep the form's numbers current while it's open
+  const saveInfoChanged = () => { if (!ui.saveForm.hidden && !saving) updateSaveForm(); };
+  ui.speed.addEventListener("change", saveInfoChanged);
+  map.on("resize", saveInfoChanged);
   ui.legend.addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-pal]");
     if (b && b.getAttribute("aria-checked") !== "true") setPalette(b.dataset.pal!);
@@ -803,6 +1072,7 @@ async function start() {
     showIdx(Number(ui.slider.value));
   });
   ui.aboutOpen.addEventListener("click", () => ui.about.showModal());
+  $<HTMLButtonElement>("#map-about-link").addEventListener("click", () => ui.about.showModal());   // phones: in the notice
   ui.about.querySelector(".map-about-close")?.addEventListener("click", () => ui.about.close());
 
   map.on("moveend", () => {
@@ -827,7 +1097,7 @@ async function start() {
 
   document.addEventListener("keydown", (e) => {
     const t = e.target as HTMLElement;
-    if (e.metaKey || e.ctrlKey || e.altKey || ui.about.open) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || ui.about.open || saving) return;
     // Leave typing and the controls' own keys alone: text fields always, and Space/Enter/arrows
     // on buttons, links, radios and the slider (they activate or move those).
     if (t.closest("textarea, select, [contenteditable], input:not([type=radio]):not([type=range])")) return;
@@ -843,6 +1113,7 @@ async function start() {
       case "?": ui.about.showModal(); break;
       case "Escape": unpin(); break;
       case "t": openGoto(); e.preventDefault(); break;
+      case "s": openSave(); e.preventDefault(); break;
     }
   });
 
