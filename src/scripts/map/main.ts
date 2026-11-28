@@ -18,6 +18,7 @@ import { LAYERS, LAYER_ORDER, NO_COVERAGE, type LayerId } from "./layers";
 import { legendHtml } from "./legend";
 import { onePixel, recolor } from "./png";
 import { latlon, PointPanel, readPoint, type PanelContext } from "./panel";
+import { RadarSites } from "./radars";
 import { histogram, type ViewBox } from "./sample";
 import { drawOverlays, gifWriter, loadFonts, outputSize, videoWriter, type LoopWriter, type PointInfo, type Scene } from "./save";
 import { summarize } from "./summary";
@@ -26,6 +27,7 @@ import { ago, fileStamp, localClock, stamp, utcStamp } from "./timefmt";
 interface Config {
   index: string;
   catalog: string;
+  radars: string;
   basemap: { pmtiles: string; standin: string };
   defaultLayer: LayerId;
   windows: { hours: number; step: number }[];
@@ -117,6 +119,7 @@ maplibregl.addProtocol("frame", frameTile);
 let map: maplibregl.Map;
 let base: Basemap;
 let labelLayers: string[] = [];
+let radars: RadarSites | null = null;      // the WSR-88D sites (S09), added once the map has loaded
 
 function setLabels(on: boolean) {
   state.labels = on;
@@ -138,8 +141,9 @@ async function createMap() {
     },
   });
   app.dataset.basemap = base.kind;
-  // Every symbol layer is a basemap label (the radar layers are rasters), so hidden labels can be
-  // set in the style itself and never flash on at load.
+  // Every symbol layer in the basemap style is a label (the radar layers are rasters, and the radar
+  // sites are added later, outside this list), so hidden labels can be set in the style itself and
+  // never flash on at load.
   labelLayers = base.style.layers.filter((l) => l.type === "symbol").map((l) => l.id);
   if (!state.labels) {
     for (const l of base.style.layers) if (l.type === "symbol") l.layout = { ...l.layout, visibility: "none" };
@@ -199,6 +203,7 @@ const ui = {
   gotoUtc: $<HTMLElement>("#map-goto-utc"),
   terrain: $<HTMLInputElement>("#map-terrain"),
   labels: $<HTMLInputElement>("#map-labels"),
+  radars: $<HTMLInputElement>("#map-radars"),
   saveOpen: $<HTMLButtonElement>("#map-save-open"),
   saveForm: $<HTMLFormElement>("#map-save"),
   savePoint: $<HTMLInputElement>("#map-save-point"),
@@ -510,7 +515,8 @@ function scheduleSummary() {
 }
 
 function renderLegend() {
-  ui.legend.innerHTML = legendHtml(LAYERS[state.layer].title, pal(state.layer), paletteChoices(state.layer));
+  ui.legend.innerHTML = legendHtml(LAYERS[state.layer].title, pal(state.layer), paletteChoices(state.layer))
+    + (radars?.legendHtml() ?? "");
 }
 
 /** The legend's color switch: the same frame, recolored. */
@@ -866,7 +872,8 @@ function exportScene(t: number, point: PointInfo | null): Scene {
     // lines break only between phrases (the spaces inside each phrase don't break)
     notes: [
       ["Experimental and unofficial.", "Not a forecast or warning."].map(nbsp).join(" "),
-      ["Radar: NOAA MRMS, not endorsed by NOAA", basemapNote, ...(state.terrain ? ["Terrain: Mapzen"] : [])].map(nbsp).join(" · "),
+      ["Radar: NOAA MRMS, not endorsed by NOAA", ...(radars?.credit() ? [radars.credit()!] : []), basemapNote,
+        ...(state.terrain ? ["Terrain: Mapzen"] : [])].map(nbsp).join(" · "),
     ],
     point,
   };
@@ -1047,6 +1054,31 @@ async function start() {
   });
   ui.labels.checked = state.labels;
   ui.labels.addEventListener("change", () => setLabels(ui.labels.checked));
+  // Phones: Labels, Terrain and Radars sit behind one "Map" chip, a small menu under the chip bar.
+  // The menu is position: fixed so the chip bar's horizontal scrolling doesn't clip it.
+  const extras = $<HTMLElement>(".map-extras");
+  const extrasBtn = $<HTMLButtonElement>("#map-extras-btn");
+  const extrasList = $<HTMLElement>("#map-extras-list");
+  const setExtrasOpen = (open: boolean) => {
+    extras.dataset.open = String(open);
+    extrasBtn.setAttribute("aria-expanded", String(open));
+    if (!open) return;
+    const r = extrasBtn.getBoundingClientRect();
+    extrasList.style.top = `${Math.round(r.bottom + 6)}px`;
+    const vw = document.documentElement.clientWidth;     // not innerWidth: that grows with the chip bar's overflow
+    extrasList.style.left = `${Math.round(Math.max(8, Math.min(r.left, vw - 8 - extrasList.offsetWidth)))}px`;
+  };
+  extrasBtn.addEventListener("click", () => setExtrasOpen(extras.dataset.open !== "true"));
+  document.addEventListener("pointerdown", (e) => {
+    if (extras.dataset.open === "true" && !extras.contains(e.target as Node)) setExtrasOpen(false);
+  });
+  ui.layers.addEventListener("scroll", () => setExtrasOpen(false), { passive: true });
+  window.addEventListener("resize", () => setExtrasOpen(false));
+  extras.addEventListener("keydown", (e) => { if (e.key === "Escape") { setExtrasOpen(false); extrasBtn.focus(); } });
+  radars = new RadarSites(map, dataOverride ? new URL("live/radars.json", dataOverride).href : cfg.radars, () => renderLegend());
+  ui.radars.checked = RadarSites.stored();
+  if (ui.radars.checked) radars.set(true);
+  ui.radars.addEventListener("change", () => radars!.set(ui.radars.checked));
   ui.saveOpen.addEventListener("click", () => openSave());
   ui.saveForm.addEventListener("submit", runSave);
   ui.saveForm.addEventListener("change", (e) => { if ((e.target as HTMLInputElement).type === "radio") updateSaveForm(); });
@@ -1092,7 +1124,10 @@ async function start() {
     if (hoverTimer) clearTimeout(hoverTimer);
     if (!pinned) panel.hide();
   });
-  map.on("click", (e) => pin(e.lngLat.lng, e.lngLat.lat));
+  map.on("click", (e) => {
+    if (radars?.hit(e.point)) return;          // a radar site: its details, not a pinned point
+    pin(e.lngLat.lng, e.lngLat.lat);
+  });
   map.on("movestart", (e) => { if ((e as { originalEvent?: Event }).originalEvent) pinSettleUntil = 0; });
 
   document.addEventListener("keydown", (e) => {
@@ -1114,6 +1149,7 @@ async function start() {
       case "Escape": unpin(); break;
       case "t": openGoto(); e.preventDefault(); break;
       case "s": openSave(); e.preventDefault(); break;
+      case "r": ui.radars.checked = !ui.radars.checked; radars?.set(ui.radars.checked); break;
     }
   });
 

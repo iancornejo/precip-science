@@ -9,7 +9,12 @@ export const LAYER_IDS = ["echo_type", "convectivity", "composite", "precip_rate
 
 const MapSettings = z.object({
   public: z.boolean().default(false),
-  data: z.object({ index: z.url(), catalog: z.url() }),
+  data: z.object({
+    index: z.url(),
+    catalog: z.url(),
+    radars: z.url().default("https://data.precip.science/live/radars.json"),
+    status: z.url().default("https://data.precip.science/live/status.json"),
+  }),
   basemap: z.object({ pmtiles: z.url(), standin: z.string().startsWith("/") }),
   default_layer: z.enum(LAYER_IDS).default("echo_type"),
   windows: z

@@ -1,0 +1,59 @@
+---
+// Server and pipeline status (S09). Unlisted: not in the menu or the sitemap, and noindex.
+// It reads live/status.json and live/radars.json, which the pipeline (pipeline repo,
+// live/ops.py) writes about every 2 and 10 minutes. Data URLs: src/data/map.yaml.
+import Base from "../layouts/Base.astro";
+import { MAP } from "../lib/map";
+import "../styles/status.css";
+
+const config = { status: MAP.data.status, radars: MAP.data.radars };
+---
+<Base title="Status" description="Server and pipeline status for precip.science's live map." noindex>
+  <header class="page-head">
+    <h1>Status</h1>
+    <p class="lead">How the server and pipeline behind the <a class="link" href="/map/">live map</a> are doing, from the report the server publishes about every 2 minutes. Experimental and unofficial.</p>
+  </header>
+
+  <div class="st" id="st" data-state="loading">
+    <p class="st-summary" id="st-summary" role="status" data-tone="wait">Loading the latest report…</p>
+    <noscript><p class="st-summary">This page needs JavaScript. The raw report is <a class="link" href={config.status}>status.json</a>.</p></noscript>
+
+    <section class="st-sec" aria-labelledby="st-layers-h">
+      <h2 id="st-layers-h" class="section-label">Map layers</h2>
+      <div class="st-scroll" id="st-layers"></div>
+    </section>
+
+    <section class="st-sec" aria-labelledby="st-checks-h">
+      <h2 id="st-checks-h" class="section-label">Checks</h2>
+      <p class="st-note">The server checks these about once a minute and sends an alert when one changes.</p>
+      <div class="st-scroll" id="st-checks"></div>
+    </section>
+
+    <section class="st-sec" aria-labelledby="st-server-h">
+      <h2 id="st-server-h" class="section-label">Server</h2>
+      <dl class="st-dl" id="st-server"></dl>
+    </section>
+
+    <section class="st-sec" aria-labelledby="st-radars-h">
+      <h2 id="st-radars-h" class="section-label">Radar sites</h2>
+      <div id="st-radars"></div>
+    </section>
+
+    <section class="st-sec" aria-labelledby="st-r2-h">
+      <h2 id="st-r2-h" class="section-label">Data host (Cloudflare R2)</h2>
+      <dl class="st-dl" id="st-r2"></dl>
+    </section>
+
+    <section class="st-sec" aria-labelledby="st-pipe-h">
+      <h2 id="st-pipe-h" class="section-label">Pipeline</h2>
+      <dl class="st-dl" id="st-pipe"></dl>
+    </section>
+
+    <p class="st-foot">Raw reports: <a class="link" href={config.status}>status.json</a> · <a class="link" href={config.radars}>radars.json</a>. Times are your local time.</p>
+  </div>
+
+  <script type="application/json" id="st-config" set:html={JSON.stringify(config)} />
+  <script>
+    import "../scripts/status.ts";
+  </script>
+</Base>

@@ -9,6 +9,7 @@ import "../styles/map.css";
 const config = {
   index: MAP.data.index,
   catalog: MAP.data.catalog,
+  radars: MAP.data.radars,
   basemap: MAP.basemap,
   defaultLayer: MAP.default_layer,
   windows: MAP.windows.map((w) => ({ hours: w.hours, step: w.step_minutes })),
@@ -46,8 +47,13 @@ const icon = {
         ))}
         <fieldset class="map-extras">
           <legend>Map</legend>
-          <label class="map-choice"><input id="map-labels" type="checkbox" checked /><span>Labels</span></label>
-          <label class="map-choice"><input id="map-terrain" type="checkbox" /><span>Terrain</span></label>
+          <!-- phones: one "Map" chip opens these as a small menu (Ian, Nov 27); wider screens list them -->
+          <button id="map-extras-btn" type="button" class="map-extras-btn" aria-expanded="false" aria-controls="map-extras-list">Map<span set:html={icon.bar} /></button>
+          <div id="map-extras-list" class="map-extras-list">
+            <label class="map-choice"><input id="map-labels" type="checkbox" checked /><span>Labels</span></label>
+            <label class="map-choice"><input id="map-terrain" type="checkbox" /><span>Terrain</span></label>
+            <label class="map-choice"><input id="map-radars" type="checkbox" /><span>Radars</span></label>
+          </div>
         </fieldset>
         <fieldset class="map-qc" disabled title="A version that masks non-weather echo (QC on) is planned.">
           <legend>QC</legend>
@@ -168,6 +174,7 @@ const icon = {
         <li>Some layers offer two color sets; the switch beside the legend title swaps them, and this browser remembers the choice.</li>
         <li>Coastlines and the shores of the big lakes are the slate lines over the radar; state and country borders are the brown ones.</li>
         <li><strong>Labels</strong> shows or hides the basemap’s names (this browser remembers), and <strong>Terrain</strong> adds shaded relief under the radar.</li>
+        <li><strong>Radars</strong> marks the WSR-88D sites with the National Weather Service’s own status, checked every 10 minutes: a dark dot is sending data, an ochre ring is late (no data for 10 minutes, or 5 minutes behind), a red × is down (no data for 30 minutes, or the radar reports itself out of service), and a small gray ring has no report. Hover over a site, or tap it, for its details. A radar that’s down leaves a hole or a seam in the mosaic until it’s back.</li>
         <li><strong>Save</strong> makes a PNG of the frame on screen, or a video or GIF of the loop, at the view you’re looking at, with the time, the color bar and the precip.science logo (and, if you like, a pinned point’s values). It’s all made in your browser; nothing is uploaded.</li>
       </ul>
 
@@ -175,12 +182,12 @@ const icon = {
       <ul class="map-keys">
         <li><kbd>Space</kbd> or <kbd>K</kbd> play or pause</li>
         <li><kbd>,</kbd> and <kbd>.</kbd> (or <kbd>J</kbd> and <kbd>L</kbd>) step back and forward</li>
-        <li><kbd>N</kbd> newest frame · <kbd>T</kbd> pick a time · <kbd>S</kbd> save · <kbd>1</kbd>–<kbd>5</kbd> layers · <kbd>Esc</kbd> close the point panel · <kbd>?</kbd> this help</li>
+        <li><kbd>N</kbd> newest frame · <kbd>T</kbd> pick a time · <kbd>S</kbd> save · <kbd>1</kbd>–<kbd>5</kbd> layers · <kbd>R</kbd> radar sites · <kbd>Esc</kbd> close the point panel · <kbd>?</kbd> this help</li>
         <li>With the map focused, arrow keys move it and <kbd>+</kbd> and <kbd>−</kbd> zoom.</li>
       </ul>
 
       <h3>Data and credits</h3>
-      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) if that can’t load. Shaded relief, when on, comes from the Terrain Tiles open dataset on AWS (Mapzen; SRTM, GMTED2010, ETOPO1, USGS 3DEP and others). The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License). Saved videos are made with <a href="https://github.com/Vanilagy/mediabunny">Mediabunny</a> (Mozilla Public License 2.0) and GIFs with <a href="https://github.com/mattdesl/gifenc">gifenc</a> (MIT).</p>
+      <p>Radar data are NOAA MRMS mosaics, processed here; they aren’t original NOAA data, and NOAA doesn’t endorse these products. The basemap is OpenStreetMap data (© OpenStreetMap contributors, ODbL) drawn with Protomaps, or Natural Earth (public domain) if that can’t load. Shaded relief, when on, comes from the Terrain Tiles open dataset on AWS (Mapzen; SRTM, GMTED2010, ETOPO1, USGS 3DEP and others). The radar sites’ status comes from the National Weather Service API (<a href="https://www.weather.gov/documentation/services-web-api">api.weather.gov</a>), read by the server every 10 minutes. The map runs on MapLibre GL JS, and its labels use the Geom typeface (SIL Open Font License). Saved videos are made with <a href="https://github.com/Vanilagy/mediabunny">Mediabunny</a> (Mozilla Public License 2.0) and GIFs with <a href="https://github.com/mattdesl/gifenc">gifenc</a> (MIT).</p>
     </div>
     <Credits ids={["mrms", "ecco", "eccopy"]} />
   </dialog>

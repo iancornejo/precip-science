@@ -8,10 +8,14 @@
 public: true
 
 # Where the pipeline publishes (S07): index.json lists the last 2 h of frames per layer,
-# catalog.json everything online (48 h, D29).
+# catalog.json everything online (48 h, D29). Since S09 also radars.json, the WSR-88D sites
+# and their status every 10 min (the map's Radars switch), and status.json, the server and
+# pipeline status every 2 min (the unlisted /status/ page).
 data:
   index: https://data.precip.science/live/index.json
   catalog: https://data.precip.science/live/catalog.json
+  radars: https://data.precip.science/live/radars.json
+  status: https://data.precip.science/live/status.json
 
 # D30: a Protomaps extract of OpenStreetMap on R2, styled to the Art glass palette. Until
 # that file is uploaded (pipeline: ops/r2-put-basemap.sh), or if it fails to load, a small
